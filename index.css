@@ -1,0 +1,23 @@
+/*
+  .class
+  #id
+*/
+
+:root {
+  --bg-light: hsl(33, 28%, 82%);
+  --bg-dark: hsl(33, 28%, 72%);
+  --border: hsl(33, 28%, 32%);
+}
+
+* {
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
