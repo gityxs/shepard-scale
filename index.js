@@ -2,18 +2,32 @@
 
 /*
 TODO:
-maintain record of total play time
 add sound every time the progress bar gets to 100. the note based on octave value
+figure out and implement some global options / stats
+  buy new octaves
+  get currency from octaves somehow, maybe just from ascending? 
+add background image
+blur progress bar if rate is too high
+global options purchasable with coda points:
+  auto buy speed rate
+  auto buy value rate
+  auto attempt coda rate
+better tune octave options
+particle effects when progress bar gets to end?
+display total play time
+display coda points
 */
 
 class App {
+  static symbols = {
+    note: '\u{266A}'
+  };
+
   constructor() {
     this.UI = {};
 
     this.UI.octaveList = document.getElementById('octaveList');
     this.UI.staticWindow = document.getElementById('staticWindow');
-
-    this.itemList = "fire,youth,spear,tag,blade,team,flake,aide,lord,slope,depot,cacao,dart,cash,enemy,corn,chalk,brace,vodka,pit,beet,pay,group,usher,lad,bark,means,toot,owl,noun,pecan,query,belt,chip,tower,plow,lyre,cone,fate,feast,equal,envy,crop,giant,inbox,feel,stalk,yoga,down,eaves,color,guess,hit,epoxy,mix,stick,rider,cube,nuke,shop,class,prow,prior,flat,spine,fob,gun,wrap,manor,ore,right,inn,verb,swamp,cot,pain,fish,bead,tour,wheat,price,taco,yoyo,pupa,slash,song,pole,kitty,jeep,dump,deed,match,novel,bake,spell,toy,dozen,start,crate,lava,sand,perch,birch,oil,purse,uncle,cow,mass,leek,perp,snack,boar,fawn,seal,scene,wok,orchid,sheet,top,shore,tap,radar,text,prose,hire,ear,chap,drama,syrup,mud,kazoo,past,age,body,share,west,dog,treat,habit,wharf,wit,tenet,bread,depth,wave,whale,talk,fig,asset,turf,shed,lag,trout,upper,aside,craw,beach,glass,tale,finer,canal,blog,topic,loaf,kale,gold,info,claw,storm,need,hop,chaos,genre,tweet,lark,hide,maple,cap,chin,yam,wind,louse,aim,back,adobe,gown,smog,spud,dwell,floor,dune,grace,goat,owner,grill,front,aid,sash,tuber,pyramid,frost,icing,bulk,hill,venom,wine,clank,towel,skin,lieu,fold,meat,boot,level,derby,wheel,brood,short,bend,brand,jump,grin,cycle,bun,scope,wear,hold,glue,latte,stone,math,coat,purr,raft,pun,white,bug,wrong,wreck,slide,sprag,guava,torte,dryer,canoe,hobby,curl,yolk,fill,hope,slaw,mover,month,dip,coil,drive,light,chasm,pearl,pig,mango,media,drain,tune,madam,taste,dime,blast,paint,gnat,spot,roar,sail,film,panda,sill,dance,ham,pimp,pizza,hunt,kilt,tempo,bet,wifi,grain,net,rug,actor,hint,crow,brick,cub,mint,spite,potty,lily,glen,humor,snow,leaf,ferry,lipid,pad,pen,wild,yard,final,pupil,bath,waist,kite,elver,link,opera,unity,cello,clamp,wage,dare,put,grey,stand,troop,hound,merit,bride,thump,air,movie,puma,arrow,fund,bidet,row,poker,break,eye,heir,park,sonar,birth,cross,glee,hose,sense,niece,lane,cabin,monk,lace,fairy,quest,puppy,king,pond,bird,chill,fail,attic,foray,claim,proof,bail,bayou,pork,seed,basin,jack,print,hug,tub,hub,graft,liver,vest,lung,gem,donut,sari,patty,event,chord,wish,poem,stop,squid,oboe,fruit,show,bunch,sushi,mound,twist,south,meal,food,fiber,mark,wood".split`,`;
 
     this.octaves = [];
     this.maxOctaveIndex = -1;
@@ -22,7 +36,7 @@ class App {
     while (this.octaves.length < 10) {
       this.maxOctaveIndex++;
       const newIndex = this.maxOctaveIndex;
-      this.octaves.push(new Octave(this, newIndex, this.itemList[newIndex % this.itemList.length], this.UI.octaveList));
+      this.octaves.push(new Octave(this, newIndex, this.UI.octaveList));
     }
 
     setInterval(() => this.tick(), 1000/60);
@@ -40,10 +54,12 @@ class App {
     if (rawState !== null) {
       const loadedState = JSON.parse(rawState);
       this.state = {...this.state, ...loadedState};
+    } else {
+      this.state.gameStart = (new Date()).getTime();
     }
 
     this.state.octaves.forEach( os => {
-      this.octaves.push(new Octave(this, os.index, this.itemList[os.index % this.itemList.length], this.UI.octaveList, os));
+      this.octaves.push(new Octave(this, os.index, this.UI.octaveList, os));
       this.maxOctaveIndex = Math.max(this.maxOctaveIndex, os.index);
     });
 
@@ -71,9 +87,28 @@ class App {
 
   update() { 
     const curTime = (new Date()).getTime() / 1000;
-    this.octaves.forEach( o => {
-      o.update(curTime);
+    this.octaves.forEach( (o, i) => {
+      o.update(curTime, i);
     });
+
+    let anyRemoved = false;
+    this.octaves = this.octaves.filter( (o, i) => {
+      o.update(curTime, i, anyRemoved);
+      if (o.coda) {
+        //TODO: increment coda count
+        o.remove();
+        anyRemoved = true;
+        return false;
+      } else {
+        return true;
+      }
+    });
+
+    while (this.octaves.length < 10) {
+      this.maxOctaveIndex++;
+      const newIndex = this.maxOctaveIndex;
+      this.octaves.push(new Octave(this, newIndex, this.UI.octaveList));
+    }
   }
 
   draw() {
@@ -112,11 +147,17 @@ class App {
 }
 
 class Octave {
-  constructor(app, index, currencyName, parentElement, state) {
+  static upgrades = {
+    speed: {baseCost: 1, costFactor: 1.1, basePower: 1, powerFactor: 1.2},
+    value: {baseCost: 1, costFactor: 1.1, basePower: 1, powerFactor: 1.2},
+    coda: {baseCost: 1, costFactor: Infinity}
+  };
+
+  constructor(app, index, parentElement, state) {
     this.app = app;
     this.index = index;
-    this.currencyName = currencyName;
     this.parentElement = parentElement;
+    this.coda = false;
 
     this.colors = {};
 
@@ -124,6 +165,10 @@ class Octave {
     this.colors.bg = `hsl(${hue}, 50%, 50%)`;
     this.colors.barBg = `hsl(${hue}, 50%, 75%)`;
     this.colors.barFg = `hsl(${hue}, 50%, 25%)`;
+    this.colors.buttonBg = `hsl(${hue}, 50%, 75%)`;
+    this.colors.buttonBgHover = `hsl(${hue}, 50%, 65%)`;
+    this.colors.buttonBgDown = `hsl(${hue}, 50%, 85%)`;
+    this.colors.buttonBorder = `hsl(${hue}, 50%, 25%)`;
 
     if (state) {
       this.state = state;
@@ -134,14 +179,25 @@ class Octave {
         percent: 0,
         baseCount: 0,
         basePercent: 0,
-        rate: 10 / index,
-        baseTime: (new Date()).getTime() / 1000
+        rate: 10,
+        baseTime: (new Date()).getTime() / 1000,
+        upgradeLevels: {
+          speed: 0,
+          value: 0,
+          coda: 0
+        }
       };
     }
 
     this.UI = {};
 
     this.genHTML();
+  }
+
+  snapshot(curTime) {
+    this.state.baseTime = curTime;
+    this.state.baseCount = this.state.count;
+    this.state.basePercent = this.state.percent;
   }
 
   createElement(type, idRoot, parent, extraClasses, text) {
@@ -154,26 +210,47 @@ class Octave {
   }
 
   genHTML() {
-    /*
-      TODO:
-        make name title case
-        show upgrade buttons
-        save/restore state
-    */
-    const topContainer = this.createElement('div', 'oContainer', this.parentElement, '', 
-      `Octave ${this.index} - ${this.currencyName}`);
+    const topContainer = this.createElement('div', 'oContainer', this.parentElement, '', '');
 
-    const countContainer = this.createElement('div', 'oCountContainer', topContainer, 
-      '', 'Steps: ');
-    
-    const countValue = this.createElement('span', 'oCountSpan', countContainer, '',
-      this.state.count);
+    const labelDiv = this.createElement('div', 'oLabel', topContainer, '', `Octave ${this.index}`);
+
+    const statDiv = this.createElement('div', 'oStatDiv', topContainer, '', '');
+    const statCountDiv = this.createElement('div', 'oStatCountDiv', statDiv, '', `Total ${App.symbols.note}:`);
+    const statCountSpan = this.createElement('span', 'oStatCountSpan', statCountDiv, '', '');
+    const statSpeedDiv = this.createElement('div', 'oStatSpeedDiv', statDiv, '', 'Speed:');
+    const statSpeedSpan = this.createElement('span', 'oStatSpeedSpan', statSpeedDiv, '', '');
+    const statValueDiv = this.createElement('div', 'oStatValueDiv', statDiv, '', 'Value:');
+    const statValueSpan = this.createElement('span', 'oStatValueSpan', statValueDiv, '', '');
 
     const progressContainer = this.createElement('div', 'oProgressContainer', topContainer,
       '', '');
 
     const progressBar = this.createElement('div', 'oProgressBar', progressContainer, '', '');
-      
+
+    const upgradeContainer = this.createElement('div', 'oUpgradeContainer', topContainer,
+      '', '');
+
+    const speedButton = this.createElement('button', 'oButtonSpeed', upgradeContainer,
+      '', '+Speed');
+
+    const valueButton = this.createElement('button', 'oButtonValue', upgradeContainer,
+      '', '+Value');
+
+    const codaButton = this.createElement('button', 'oButtonCoda', upgradeContainer,
+      '', 'Coda');
+
+    speedButton.onclick = () => this.buyUpgrade('speed');
+    valueButton.onclick = () => this.buyUpgrade('value');
+    codaButton.onclick = () => this.buyUpgrade('coda');
+    [speedButton, valueButton, codaButton].forEach( b => {
+      b.onmouseenter = () => this.buttonHoverStart(b);
+      b.onmouseleave = () => this.buttonHoverEnd(b);
+      b.onmousedown = () => this.buttonDown(b);
+      b.onmouseup = () => this.buttonUp(b);
+      b.style.background = this.colors.buttonBg;
+      b.style.borderColor = this.colors.buttonBorder;
+    });
+
     this.topContainer = topContainer;
 
     topContainer.style.background = this.colors.bg;
@@ -186,22 +263,82 @@ class Octave {
     }, 0);
   }
 
+  buttonHoverStart(button) {
+    button.style.background = this.colors.buttonBgHover;
+  }
+
+  buttonHoverEnd(button) {
+    button.style.background = this.colors.buttonBg;
+  }
+
+  buttonDown(button) {
+    button.style.background = this.colors.buttonBgDown;
+  }
+
+  buttonUp(button) {
+    button.style.background = this.colors.buttonBg;
+  }
+
   remove() {
     this.topContainer.style.opacity = 0;
     this.topContainer.style.height = 0;
+    this.topContainer.style.padding = 0;
+    this.topContainer.style.marginBottom = 0;
+    setTimeout(() => this.topContainer.remove(), 1000);
   }
 
-  update(curTime) {
-    const deltaTime = curTime - this.state.baseTime;
-    const deltaPercent = this.state.rate * deltaTime;
-    this.state.count = this.state.baseCount + Math.floor(deltaPercent / 100);
-    this.state.percent = this.state.basePercent + (deltaPercent % 100);
+  getCurrentRate() {
+    return Math.round(10 * Math.pow(1.2, this.state.upgradeLevels.speed));
+  }
+
+  getCurrentValue() {
+    return Math.round(1 * Math.pow(1.2, this.state.upgradeLevels.value));
+  }
+
+  update(curTime, stackIndex, snapshot) {
+    //timeScale equation is chosen so index of 0 returns 1 and index of 10+ returns 0
+    const A = 1 / (1 - Math.pow(Math.E, -10));
+    const timeScale = Math.max(0, A*Math.pow(Math.E, -stackIndex) + (1 - A));
+    const deltaTime = (curTime - this.state.baseTime) * timeScale;
+    //const deltaPercent = this.state.rate * deltaTime;
+    const deltaPercent = this.getCurrentRate() * deltaTime;
+    this.state.count = this.state.baseCount + this.getCurrentValue() * Math.floor((this.state.basePercent + deltaPercent) / 100);
+    this.state.percent = (this.state.basePercent + deltaPercent) % 100;
+    if (snapshot) {
+      this.snapshot(curTime);
+    }
+
+    this.UI.oButtonSpeed.disabled = this.getUpgradeCost('speed') > this.state.count;
+    this.UI.oButtonValue.disabled = this.getUpgradeCost('value') > this.state.count;
+    this.UI.oButtonCoda.disabled = this.getUpgradeCost('coda') > this.state.count;
   }
 
   draw() {
+    this.UI.oStatCountSpan.innerText = this.state.count;
+    this.UI.oStatSpeedSpan.innerText = this.getCurrentRate();
+    this.UI.oStatValueSpan.innerText = this.getCurrentValue();
     this.UI.oProgressBar.style.width = `${this.state.percent}%`;
-    this.UI.oCountSpan.innerText = this.state.count;
+    this.UI.oButtonSpeed.innerText = `+Speed ${App.symbols.note} ${this.getUpgradeCost('speed')}`;
+    this.UI.oButtonValue.innerText = `+Value ${App.symbols.note} ${this.getUpgradeCost('value')}`;
+    this.UI.oButtonCoda.innerText = `+Coda ${App.symbols.note} ${this.getUpgradeCost('coda')}`;
+  }
+
+  getUpgradeCost(type) {
+    const typeInfo = Octave.upgrades[type];
+    return Math.round(typeInfo.baseCost * Math.pow(typeInfo.costFactor, this.state.upgradeLevels[type]));
+  }
+
+  buyUpgrade(type) {
+    console.log('upgrade', type);
+    const cost = this.getUpgradeCost(type);
+    if (this.state.count >= cost) {
+      this.state.count -= cost;
+      this.state.upgradeLevels[type]++;
+      this.coda = type === 'coda';
+      this.snapshot((new Date()).getTime() / 1000);
+    }
   }
 }
+
 
 const app = new App();
