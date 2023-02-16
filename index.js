@@ -3,19 +3,12 @@
 /*
 TODO:
 add sound every time the progress bar gets to 100. the note based on octave value
-figure out and implement some global options / stats
-  buy new octaves
-  get currency from octaves somehow, maybe just from ascending? 
-add background image
-blur progress bar if rate is too high
-global options purchasable with coda points:
-  auto buy speed rate
-  auto buy value rate
-  auto attempt coda rate
 better tune octave options
+  not all octaves have the same properties
 particle effects when progress bar gets to end?
-display total play time
-display coda points
+add reset button
+count & display total octaves cleared
+save/reload auto enabled status
 */
 
 class App {
@@ -23,14 +16,22 @@ class App {
     note: '\u{266A}'
   };
 
+
   constructor() {
     this.UI = {};
+    this.octaves = [];
+    this.maxOctaveIndex = -1;
+
+    this.upgrades = {
+      autoSpeed: {baseCost: 1, costFactor: 1.1, basePower: 60, powerFactor: 0.9},
+      autoValue: {baseCost: 1, costFactor: 1.1, basePower: 60, powerFactor: 0.9},
+      autoCoda: {baseCost: 1, costFactor: 1.1, basePower: 60, powerFactor: 0.9},
+      codaMult: {baseCost: 1, costFactor: 1.1, basePower: 1, powerFactor: 1.2}
+    };
 
     this.UI.octaveList = document.getElementById('octaveList');
     this.UI.staticWindow = document.getElementById('staticWindow');
 
-    this.octaves = [];
-    this.maxOctaveIndex = -1;
     this.loadFromStorage();
 
     while (this.octaves.length < 10) {
@@ -38,6 +39,8 @@ class App {
       const newIndex = this.maxOctaveIndex;
       this.octaves.push(new Octave(this, newIndex, this.UI.octaveList));
     }
+
+    this.initGlobalUI();
 
     setInterval(() => this.tick(), 1000/60);
     setInterval(() => this.saveToStorage(), 5000);
@@ -48,7 +51,17 @@ class App {
     const rawState = localStorage.getItem('shepard_scale');
 
     this.state = {
-      octaves: []
+      octaves: [],
+      coda: 0,
+      upgradeLevels: {
+        autoSpeed: 0,
+        autoValue: 0,
+        autoCoda: 0,
+        codaMult: 0
+      },
+      autoSpeedLast: 0,
+      autoValueLast: 0,
+      autoCodaLast: 0
     };
 
     if (rawState !== null) {
@@ -87,15 +100,31 @@ class App {
 
   update() { 
     const curTime = (new Date()).getTime() / 1000;
-    this.octaves.forEach( (o, i) => {
-      o.update(curTime, i);
+
+    'autoSpeed,autoValue,autoCoda'.split`,`.forEach( u => {
+      const lastName = u + 'Last';
+      const upgradeName = this.autoUpgradeToName(u);
+      const timeElapsed = curTime - this.state[lastName];
+      const maxTime = this.getUpgradeValue(u);
+      const percent = Math.min(100 * timeElapsed / maxTime, 100);
+      const percentName = u + 'Percent';
+      this.state[percentName] = percent;
+      if (timeElapsed >= maxTime) {
+        this.state[lastName] = curTime;
+        if (this.UI[`${u}EnableDiv`].checked) {
+          this.octaves.some( o => {
+            return o.buyUpgrade(upgradeName);
+          });
+        }
+      }
     });
+
 
     let anyRemoved = false;
     this.octaves = this.octaves.filter( (o, i) => {
       o.update(curTime, i, anyRemoved);
       if (o.coda) {
-        //TODO: increment coda count
+        this.state.coda += this.getUpgradeValue('codaMult');
         o.remove();
         anyRemoved = true;
         return false;
@@ -115,6 +144,46 @@ class App {
     this.octaves.forEach( o => {
       o.draw();
     });
+
+    const gameLength = (new Date()).getTime() - this.state.gameStart;
+    const gameTime = this.timeToObj(gameLength / 1000);
+    const gameTimeStr = this.timeObjToLongStr(gameTime);
+    this.UI.playTimeSpan.innerText = gameTimeStr;
+
+    this.UI.codaCountSpan.innerText = this.state.coda;
+
+    'autoSpeed,autoValue,autoCoda,codaMult'.split`,`.forEach( u => {
+      this.UI[`${u}CostDiv`].innerText = this.getUpgradeCost(u);
+      this.UI[`${u}ValueDiv`].innerText = this.getUpgradeValue(u);
+      const percentName = u + 'Percent';
+      const progress = this.state[percentName];
+      this.UI[`${u}ProgressBar`].style.width = `${progress}%`;
+    });
+
+  }
+
+  timeToObj(t) {
+    const result = {};
+
+    result.y = Math.floor(t / (365 * 24 * 60 * 60));
+    t = t % (365 * 24 * 60 * 60);
+    result.d = Math.floor(t / (24 * 60 * 60));
+    t = t % (24 * 60 * 60);
+    result.h = Math.floor(t / (60 * 60));
+    t = t % (60 * 60);
+    result.m = Math.floor(t / 60);
+    t = t % 60;
+    result.s = t;
+
+    return result;
+  }
+
+  leftPad(value, padChar, minLen) {
+    return padChar.repeat(Math.max(0, minLen - value.toString().length)) + value;
+  }
+
+  timeObjToLongStr(o) {
+    return `${o.y} years ${this.leftPad(o.d, '0', 3)} days ${this.leftPad(o.h, '0', 2)} hours ${this.leftPad(o.m, '0', 2)} minutes ${this.leftPad(Math.floor(o.s), '0', 2)} seconds`;
   }
 
   createElement(type, id, parent, classes, text) { 
@@ -143,6 +212,75 @@ class App {
 
     return e; 
   } 
+
+  initGlobalUI() {
+
+    let grad = 'linear-gradient(180deg, ';
+    const gradSteps = 10;
+    const gradSat = 50;
+    const gradLum = 70;
+    for (let i = 0; i <= gradSteps; i++) {
+      grad += `hsl(${360 * i / gradSteps},${gradSat}%,${gradLum}%) ${100 * i/gradSteps}%,`;
+    }
+    grad = grad.substring(0, grad.length - 1) + ')';
+    this.UI.staticWindow.style.background = grad;
+
+
+    const codaCountDiv = this.createElement('div', 'codaCountDiv', this.UI.staticWindow, '', 'Coda count: ');
+    const codaCountSpan = this.createElement('span', 'codaCountSpan', codaCountDiv, '', '');
+
+    const upgradeGrid = this.createElement('div', 'globalUpgradeGrid', this.UI.staticWindow, '', ''); 
+    const upgradeGridL0 = this.createElement('div', 'globalUpgradeGridL0', upgradeGrid, '', 'Progress');
+    const upgradeGridL1 = this.createElement('div', 'globalUpgradeGridL1', upgradeGrid, '', 'Buy');
+    const upgradeGridL2 = this.createElement('div', 'globalUpgradeGridL2', upgradeGrid, '', 'Cost (coda)');
+    const upgradeGridL3 = this.createElement('div', 'globalUpgradeGridL3', upgradeGrid, '', 'Value');
+    const upgradeGridL4 = this.createElement('div', 'globalUpgradeGridL4', upgradeGrid, '', 'Enable');
+
+    'autoSpeed,autoValue,autoCoda,codaMult'.split`,`.forEach( u => {
+      const progressContainer = this.createElement('div', `${u}ProgressContainer`, upgradeGrid, 'gProgressContainer', '');
+      const progressBar = this.createElement('div', `${u}ProgressBar`, progressContainer, 'gProgressBar', '');
+      const rowButton = this.createElement('button', `${u}Button`, upgradeGrid, 'buttonGlobalUpgrade', (u === 'codaMult' ? '+' : '-') + u);
+      const costDiv = this.createElement('div', `${u}CostDiv`, upgradeGrid, '', '');
+      const curValue = this.createElement('div', `${u}ValueDiv`, upgradeGrid, '', 'value');
+      if (u !== 'codaMult') {
+        const enabled = this.createElement('input', `${u}EnableDiv`, upgradeGrid, '', 'enable');
+        enabled.type = 'checkbox';
+        enabled.checked = true;
+      }
+
+      rowButton.onclick = () => this.buyUpgrade(u);
+    });
+
+
+    const playTimeDiv = this.createElement('div', 'playTimeDiv', this.UI.staticWindow, '', 'Total play time: ');
+    const playTimeSpan = this.createElement('span', 'playTimeSpan', playTimeDiv, '', '');
+  }
+
+  getUpgradeValue(type) {
+    if (type !== 'codaMult') {
+      if (this.state.upgradeLevels[type] === 0) {
+        return Infinity;
+      }
+    }
+    return Math.round(this.upgrades[type].basePower * Math.pow(this.upgrades[type].powerFactor, this.state.upgradeLevels[type]));
+  }
+
+  getUpgradeCost(type) {
+    return Math.round(this.upgrades[type].baseCost * Math.pow(this.upgrades[type].costFactor, this.state.upgradeLevels[type]));
+  }
+
+  buyUpgrade(type) {
+    console.log('Gupgrade', type);
+    const cost = this.getUpgradeCost(type);
+    if (this.state.coda >= cost) {
+      this.state.coda -= cost;
+      this.state.upgradeLevels[type]++;
+    }
+  }
+
+  autoUpgradeToName(type) {
+    return {autoSpeed: 'speed', autoValue: 'value', autoCoda: 'coda'}[type];
+  }
 
 }
 
@@ -317,7 +455,13 @@ class Octave {
     this.UI.oStatCountSpan.innerText = this.state.count;
     this.UI.oStatSpeedSpan.innerText = this.getCurrentRate();
     this.UI.oStatValueSpan.innerText = this.getCurrentValue();
-    this.UI.oProgressBar.style.width = `${this.state.percent}%`;
+    if (this.getCurrentRate() < 1000) {
+      this.UI.oProgressBar.style.width = `${this.state.percent}%`;
+      this.UI.oProgressContainer.style.filter = '';
+    } else {
+      this.UI.oProgressBar.style.width = `100%`;
+      this.UI.oProgressContainer.style.filter = 'blur(2px)';
+    }
     this.UI.oButtonSpeed.innerText = `+Speed ${App.symbols.note} ${this.getUpgradeCost('speed')}`;
     this.UI.oButtonValue.innerText = `+Value ${App.symbols.note} ${this.getUpgradeCost('value')}`;
     this.UI.oButtonCoda.innerText = `+Coda ${App.symbols.note} ${this.getUpgradeCost('coda')}`;
@@ -329,14 +473,16 @@ class Octave {
   }
 
   buyUpgrade(type) {
-    console.log('upgrade', type);
     const cost = this.getUpgradeCost(type);
     if (this.state.count >= cost) {
+      console.log('upgrade', type, this.index );
       this.state.count -= cost;
       this.state.upgradeLevels[type]++;
       this.coda = type === 'coda';
       this.snapshot((new Date()).getTime() / 1000);
+      return true;
     }
+    return false;
   }
 }
 

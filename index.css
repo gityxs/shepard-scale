@@ -25,13 +25,57 @@ body {
   grid-gap: 1em;
   height: 100%;
   overflow-y: hidden;
+  background-image: url(./music2.jpg);
+  background-size: cover;
+}
+
+h1 {
+  background: hsla(0, 0%, 0%, 0.2);
+  width: fit-content;
+  padding: 0.1em 0.2em;
 }
 
 button {
   border: 1px solid;
+  font-family: 'Varela Round', sans-serif;
+}
+
+.buttonGlobalUpgrade {
+  background: hsl(0, 0%, 90%);
+  min-width: 75%;
+}
+
+.buttonGlobalUpgrade:hover {
+  background: hsl(0, 0%, 80%);
+}
+
+.buttonGlobalUpgrade:active {
+  background: hsl(0, 0%, 95%);
 }
 
 #staticWindow {
+  height: 100%;
+  padding: 0.5em;
+}
+
+#globalUpgradeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+  grid-column-gap: 1em;
+  grid-row-gap: 0.5em;
+  justify-items: center;
+}
+
+.gProgressContainer {
+  width: 100%;
+  height: 1em;
+  background: hsl(0, 0%, 75%);
+}
+
+.gProgressBar {
+  width: 0%;
+  height: 1em;
+  background: hsl(0, 0%, 50%);
 }
 
 #octaveColumn {
@@ -51,7 +95,7 @@ button {
 .oLabel {
   background: hsla(0, 0%, 0%, 0.2);
   width: fit-content;
-  padding: 0.1em;
+  padding: 0.1em 0.2em;
 }
 
 .oProgressContainer {
