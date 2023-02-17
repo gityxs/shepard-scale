@@ -149,12 +149,13 @@ class App {
         this.state[lastName] = curTime;
         if (this.UI[`${u}EnableDiv`].checked) {
           this.octaves.some( o => {
-            if (document.body.animate && this.UI.particlesEnableDiv.checked) {
+            const bought = o.buyUpgrade(upgradeName);
+            if (bought && document.body.animate && this.UI.particlesEnableDiv.checked) {
               const fromRect = this.UI[`${u}ProgressContainer`].getBoundingClientRect();
               const toRect = o.UI[`oButton${upgradeName[0].toUpperCase() + upgradeName.substring(1)}`].getBoundingClientRect();
               this.createUpgradeParticle(fromRect.right, fromRect.top, toRect.right, toRect.top);
             }
-            return o.buyUpgrade(upgradeName);
+            return bought;
           });
         }
       }
@@ -347,7 +348,6 @@ class App {
   createUpgradeParticle(x1, y1, x2, y2) {
     const particle = document.createElement('div');
     particle.classList.add('particle');
-    //TODO: get better symbol
     particle.innerText = App.symbols.arrow;
     document.body.appendChild(particle);
 
