@@ -2,18 +2,15 @@
 
 /*
 TODO:
-add sound every time the progress bar gets to 100. the note based on octave value
-  when it gets to blur, just keep the sound constant
-add option to disable sound
 better tune octave options
   not all octaves have the same properties
-particle effects when progress bar gets to end?
-add option to disable particles
 */
 
 class App {
   static symbols = {
-    note: '\u{266A}'
+    note: '\u{266A}',
+    division: '\u{00F7}',
+    arrow: '\u{1F8A0}'
   };
 
 
@@ -44,10 +41,27 @@ class App {
 
     this.initGlobalUI();
 
+    this.audioInterface = new AudioInterface();
+
     setInterval(() => this.tick(), 1000/60);
     setInterval(() => this.saveToStorage(), 5000);
 
+    //this.nextNote = 0;
+    //setInterval(() => this.playNextNote(), 1000);
+
   }
+
+  /*
+  playNextNote() {
+    const baseVol = Math.pow(1 - (this.nextNote / 12), 2);
+    const highVol = Math.pow(this.nextNote / 12, 2);
+    console.log(this.nextNote, baseVol, highVol);
+
+    this.audioInterface.playFreq(Octave.noteFreqs[this.nextNote], 0.5, {mainVolume: highVol * 0.1});
+    this.audioInterface.playFreq(Octave.noteFreqs[this.nextNote] * 2, 0.5, {mainVolume: baseVol * 0.1});
+    this.nextNote = (this.nextNote + 1) % 12;
+  }
+  */
  
   loadFromStorage() {
     const rawState = localStorage.getItem('shepard_scale');
@@ -68,7 +82,9 @@ class App {
       enables: {
         autoSpeed: true,
         autoValue: true,
-        autoCoda: true
+        autoCoda: true,
+        particles: true,
+        audio: true
       }
     };
 
@@ -95,7 +111,13 @@ class App {
     'autoSpeed,autoValue,autoCoda'.split`,`.forEach( u => {
       const name = `${u}EnableDiv`;
       if (this.UI[name]) {
-        this.state.enables[u] = this.UI[`${u}EnableDiv`].checked;
+        this.state.enables[u] = this.UI[name].checked;
+      }
+    });
+    'particles,audio'.split`,`.forEach( e => {
+      const name = `${e}EnableDiv`;
+      if (this.UI[name]) {
+        this.state.enables[e] = this.UI[name].checked;
       }
     });
     const saveString = JSON.stringify(this.state);
@@ -127,6 +149,11 @@ class App {
         this.state[lastName] = curTime;
         if (this.UI[`${u}EnableDiv`].checked) {
           this.octaves.some( o => {
+            if (document.body.animate && this.UI.particlesEnableDiv.checked) {
+              const fromRect = this.UI[`${u}ProgressContainer`].getBoundingClientRect();
+              const toRect = o.UI[`oButton${upgradeName[0].toUpperCase() + upgradeName.substring(1)}`].getBoundingClientRect();
+              this.createUpgradeParticle(fromRect.right, fromRect.top, toRect.right, toRect.top);
+            }
             return o.buyUpgrade(upgradeName);
           });
         }
@@ -276,6 +303,14 @@ class App {
     const totalCodaDiv = this.createElement('div', 'totalCodaDiv', this.UI.staticWindow, '', 'Total coda: ');
     const totalCodaSpan = this.createElement('span', 'totalCodaSpan', totalCodaDiv, '', '');
 
+    'particles,audio'.split`,`.forEach( e => {
+      const container = this.createElement('div', `${e}EnableContainer`, this.UI.staticWindow, '', '');
+      const enable = this.createElement('input', `${e}EnableDiv`, container, '', '');
+      enable.type = 'checkbox';
+      enable.checked = this.state.enables[e];
+      const label = this.createElement('span', `${e}EnableLabel`, container, '', `Enable ${e}`);
+    });
+
     const resetButton = this.createElement('button', 'resetButton', this.UI.staticWindow, 'buttonUtil', 'Reset game');
     resetButton.onclick = () => this.UI.resetContainer.style.display = 'block';
 
@@ -309,6 +344,42 @@ class App {
     return {autoSpeed: 'speed', autoValue: 'value', autoCoda: 'coda'}[type];
   }
 
+  createUpgradeParticle(x1, y1, x2, y2) {
+    const particle = document.createElement('div');
+    particle.classList.add('particle');
+    //TODO: get better symbol
+    particle.innerText = App.symbols.arrow;
+    document.body.appendChild(particle);
+
+    const size = 10;
+    particle.style.width = `${size}px`;
+    particle.style.height = `${size}px`;
+
+    const animation = particle.animate([
+      {
+        transform: `translate(${x1 - size / 2}px, ${y1 - size / 2}px)`,
+        opacity: 1
+      },
+      {
+        transform: `translate(${x2 - size / 2}px, ${y2 - size / 2}px)`,
+        opacity: 1,
+        offset: 0.99
+      },
+      {
+        transform: `translate(${x2 - size / 2}px, ${y2 - size / 2}px)`,
+        opacity: 0
+      }
+    ], {
+      duration: 2000,
+      easing: 'cubic-bezier(0, .9, .57, 1)',
+      delay: Math.random() * 200
+    });
+
+    animation.onfinish = () => {
+      particle.remove();
+    };
+  }
+
 }
 
 class Octave {
@@ -318,15 +389,18 @@ class Octave {
     coda: {baseCost: 1, costFactor: Infinity}
   };
 
+  static noteFreqs = [ 261.63,277.18,293.66,311.13,329.63,349.23,369.99,392.00,415.30,440.00,466.16,493.88 ];
+
   constructor(app, index, parentElement, state) {
     this.app = app;
     this.index = index;
+    this.noteIndex = index % 12;
     this.parentElement = parentElement;
     this.coda = false;
 
     this.colors = {};
 
-    const hue = index * 360 / 16;
+    const hue = this.noteIndex * 360 / 12;
     this.colors.bg = `hsl(${hue}, 50%, 50%)`;
     this.colors.barBg = `hsl(${hue}, 50%, 75%)`;
     this.colors.barFg = `hsl(${hue}, 50%, 25%)`;
@@ -460,18 +534,46 @@ class Octave {
     return Math.round(1 * Math.pow(1.2, this.state.upgradeLevels.value));
   }
 
-  update(curTime, stackIndex, snapshot) {
+  getTimescale(stackIndex) {
+    /*
     //timeScale equation is chosen so index of 0 returns 1 and index of 10+ returns 0
     const A = 1 / (1 - Math.pow(Math.E, -10));
-    const timeScale = Math.max(0, A*Math.pow(Math.E, -stackIndex) + (1 - A));
-    const deltaTime = (curTime - this.state.baseTime) * timeScale;
+    const timescale = Math.max(0, A*Math.pow(Math.E, -stackIndex) + (1 - A));
+    return timescale;
+    */
+    return 1/([1, 3, 8, 20, 50, 150, 400, 1150, 3500, 12800, Infinity][stackIndex]);
+  }
+
+  update(curTime, stackIndex, snapshot) {
+    this.curStackIndex = stackIndex;
+    const timescale = this.getTimescale(stackIndex);
+    const deltaTime = (curTime - this.state.baseTime) * timescale;
     //const deltaPercent = this.state.rate * deltaTime;
     const deltaPercent = this.getCurrentRate() * deltaTime;
+    const lastCount = this.state.count;
     this.state.count = this.state.baseCount + this.getCurrentValue() * Math.floor((this.state.basePercent + deltaPercent) / 100);
+    const deltaCount = this.state.count - lastCount;
     this.state.percent = (this.state.basePercent + deltaPercent) % 100;
     if (snapshot) {
       this.snapshot(curTime);
     }
+
+    if (deltaCount > 0 && this.getCurrentRate() < 1000) {
+      if (document.body.animate && this.app.UI.particlesEnableDiv.checked) {
+        const rect = this.UI.oProgressContainer.getBoundingClientRect();
+        this.createParticle(rect.right, rect.top);
+
+      }
+
+      if (this.app.UI.audioEnableDiv.checked) {
+        const baseVol = Math.pow(1 - (this.noteIndex / 12), 2);
+        const highVol = Math.pow(this.noteIndex / 12, 2);
+
+        this.app.audioInterface.playFreq(Octave.noteFreqs[this.noteIndex], 0.5, {mainVolume: highVol * 0.1});
+        this.app.audioInterface.playFreq(Octave.noteFreqs[this.noteIndex] * 2, 0.5, {mainVolume: baseVol * 0.1});
+      }
+    }
+
 
     this.UI.oButtonSpeed.disabled = this.getUpgradeCost('speed') > this.state.count;
     this.UI.oButtonValue.disabled = this.getUpgradeCost('value') > this.state.count;
@@ -480,7 +582,12 @@ class Octave {
 
   draw() {
     this.UI.oStatCountSpan.innerText = this.state.count;
-    this.UI.oStatSpeedSpan.innerText = this.getCurrentRate();
+    if (this.curStackIndex === 0) {
+      this.UI.oStatSpeedSpan.innerText = `${this.getCurrentRate()}`;
+    } else {
+      const timescale = this.getTimescale(this.curStackIndex);
+      this.UI.oStatSpeedSpan.innerText = `${this.getCurrentRate()} ( ${App.symbols.division} ${(1/timescale).toFixed(0)})`;
+    }
     this.UI.oStatValueSpan.innerText = this.getCurrentValue();
     if (this.getCurrentRate() < 1000) {
       this.UI.oProgressBar.style.width = `${this.state.percent}%`;
@@ -492,6 +599,43 @@ class Octave {
     this.UI.oButtonSpeed.innerText = `+Speed ${App.symbols.note} ${this.getUpgradeCost('speed')}`;
     this.UI.oButtonValue.innerText = `+Value ${App.symbols.note} ${this.getUpgradeCost('value')}`;
     this.UI.oButtonCoda.innerText = `+Coda ${App.symbols.note} ${this.getUpgradeCost('coda')}`;
+  }
+
+  createParticle(x, y) {
+    //based on https://css-tricks.com/playing-with-particles-using-the-web-animations-api/
+    const particle = document.createElement('div');
+    particle.classList.add('particle');
+    particle.innerText = App.symbols.note;
+    document.body.appendChild(particle);
+
+    const size = 10;
+
+    particle.style.width = `${size}px`;
+    particle.style.height = `${size}px`;
+
+    //particle.style.background = 'red';
+
+    const dx = x + 10 * Math.sin(Math.random() * 2 * Math.PI);
+    const dy = y - 40 - 20 * Math.random();
+
+    const animation = particle.animate([
+      {
+        transform: `translate(${x - size/2}px, ${y - size/2}px)`,
+        opacity: 1
+      },
+      {
+        transform: `translate(${dx}px, ${dy}px)`,
+        opacity: 0
+      }
+    ], {
+      duration: 1000 + Math.random() * 1000,
+      easing: 'cubic-bezier(0, .9, .57, 1)',
+      delay: Math.random() * 200
+    });
+
+    animation.onfinish = () => {
+      particle.remove();
+    };
   }
 
   getUpgradeCost(type) {
@@ -513,5 +657,124 @@ class Octave {
   }
 }
 
+class AudioInterface {
+  constructor() {
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.samplesDB = {};
+  }
+
+  playFreq(freq, duration, passedOpts) {
+    const audioCtx = this.ctx;
+    const sampleRate = audioCtx.sampleRate;
+  
+    let myArrayBuffer;
+    if (this.samplesDB[freq] === undefined) {
+
+      const options = {...{
+        type: 'sine',
+        fadeInTime: 0.05,
+        mainVolume: 0.1,
+        channels: 1,
+        continuous: false,
+        side: 3, //0 = none, 1 = left, 2 = right, 3 = both
+        t0: 0, //initial time
+        a0: [0] //initial value
+      }, ...passedOpts};
+
+      const fadeInSamples = options.fadeInTime *  sampleRate;
+
+      const frameCount = audioCtx.sampleRate * duration;
+
+      myArrayBuffer = audioCtx.createBuffer(options.channels, frameCount, audioCtx.sampleRate);
+      //const finalValues = (new Array(options.channels)).fill(0);
+      for (let channel = 0; channel < options.channels; channel++) {
+    
+        if (((1 << channel) & options.side) === 0) {continue;} 
+    
+        // This gives us the actual array that contains the data
+        const nowBuffering = myArrayBuffer.getChannelData(channel);
+
+        const components = [
+          {type: options.type, freq: freq, vol: 1.0}
+        ];
+        const totalVolume = components.reduce((a,e) => a + e.vol, 0);
+        const volumeScale = options.mainVolume / totalVolume;
+        components.forEach(component => {
+          for (let i = 0; i < frameCount; i++) {
+            // audio needs to be in [-1.0; 1.0]
+            const t = i / sampleRate;
+            let vol;
+            if (options.continuous) {
+              vol = component.vol;
+            } else {
+              const fadeSamples = sampleRate * 0.01;
+              //this fade is tiny just to avoid clipping on start/stop
+              if (i < fadeSamples) {
+                vol = component.vol * i / fadeSamples;
+              } else if (i + fadeSamples > frameCount) {
+                vol = component.vol * (frameCount - i) / fadeSamples;
+              } else {
+                vol = component.vol;
+              }
+            }
+         
+            if (i < fadeInSamples) {
+              vol *= vol * i / fadeInSamples;
+            }
+
+            if (i > (frameCount - fadeInSamples)) {
+              vol *= vol * (frameCount - i) / fadeInSamples;
+            }
+         
+            switch (component.type) {
+              case 'sine':
+                const freq = component.freq;
+                nowBuffering[i] += volumeScale * vol * Math.sin(freq * 2 * Math.PI * (t + options.t0));
+                break;
+              case 'seq':
+                component.notes.forEach( note => {           
+                  if (t >= note.start && t < note.stop) {
+                    const fadeTime = 0.1;
+                    const fadeVolume = Math.tanh((t-fadeTime/2)*6/fadeTime)+1;
+                    nowBuffering[i] += fadeVolume * volumeScale * vol * Math.sin(note.freq * 2 * Math.PI * t);
+                  }
+                });
+                break;
+              case 'rnd':
+                if (i === 0) {
+                  nowBuffering[i] += options.a0[channel]; //volumeScale * vol * (Math.random() * 2 - 1);
+                } else {           
+                  const Fc = component.freq; //corner frequency of filter
+                  const Ts = sampleRate; //sampling period
+                  const RC = 1 / (2 * Math.PI * Fc);  //time constant
+                  const alpha = (1/Ts) / (RC + 1/Ts); //smoothing factor
+                  const newVal = volumeScale * vol * (Math.random() * 2 - 1);
+                  nowBuffering[i] += alpha * newVal + (1-alpha) * nowBuffering[i-1];
+                }
+                break;
+            }
+           //finalValues[channel] = nowBuffering[i];
+          }
+        });
+      }  
+
+      this.samplesDB[freq] = myArrayBuffer;
+    } else {
+      myArrayBuffer = this.samplesDB[freq];
+    }
+    // Get an AudioBufferSourceNode.
+    // This is the AudioNode to use when we want to play an AudioBuffer
+    var source = audioCtx.createBufferSource();
+    // set the buffer in the AudioBufferSourceNode
+    source.buffer = myArrayBuffer;
+    // connect the AudioBufferSourceNode to the
+    // destination so we can hear the sound
+    source.connect(audioCtx.destination);
+    // start the source playing
+    
+    source.start(audioCtx.currentTime);
+    //return finalValues;
+  }
+}
 
 const app = new App();
