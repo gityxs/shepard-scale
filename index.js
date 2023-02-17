@@ -3,12 +3,12 @@
 /*
 TODO:
 add sound every time the progress bar gets to 100. the note based on octave value
+  when it gets to blur, just keep the sound constant
+add option to disable sound
 better tune octave options
   not all octaves have the same properties
 particle effects when progress bar gets to end?
-add reset button
-count & display total octaves cleared
-save/reload auto enabled status
+add option to disable particles
 */
 
 class App {
@@ -23,14 +23,16 @@ class App {
     this.maxOctaveIndex = -1;
 
     this.upgrades = {
-      autoSpeed: {baseCost: 1, costFactor: 1.1, basePower: 60, powerFactor: 0.9},
-      autoValue: {baseCost: 1, costFactor: 1.1, basePower: 60, powerFactor: 0.9},
-      autoCoda: {baseCost: 1, costFactor: 1.1, basePower: 60, powerFactor: 0.9},
-      codaMult: {baseCost: 1, costFactor: 1.1, basePower: 1, powerFactor: 1.2}
+      autoSpeed: {baseCost: 2, costFactor: 2, basePower: 60, powerFactor: 0.9},
+      autoValue: {baseCost: 2, costFactor: 2, basePower: 60, powerFactor: 0.9},
+      autoCoda: {baseCost: 2, costFactor: 2, basePower: 60, powerFactor: 0.9},
+      codaMult: {baseCost: 2, costFactor: 2, basePower: 1, powerFactor: 1.2}
     };
 
-    this.UI.octaveList = document.getElementById('octaveList');
-    this.UI.staticWindow = document.getElementById('staticWindow');
+    'octaveList,staticWindow,resetContainer,resetYes,resetNo'.split`,`.forEach( id => {
+      this.UI[id] = document.getElementById(id);
+    });
+    
 
     this.loadFromStorage();
 
@@ -53,6 +55,7 @@ class App {
     this.state = {
       octaves: [],
       coda: 0,
+      totalCoda: 0,
       upgradeLevels: {
         autoSpeed: 0,
         autoValue: 0,
@@ -61,7 +64,12 @@ class App {
       },
       autoSpeedLast: 0,
       autoValueLast: 0,
-      autoCodaLast: 0
+      autoCodaLast: 0,
+      enables: {
+        autoSpeed: true,
+        autoValue: true,
+        autoCoda: true
+      }
     };
 
     if (rawState !== null) {
@@ -83,6 +91,12 @@ class App {
     this.state.octaves = [];
     this.octaves.forEach( o => {
       this.state.octaves.push(o.state);
+    });
+    'autoSpeed,autoValue,autoCoda'.split`,`.forEach( u => {
+      const name = `${u}EnableDiv`;
+      if (this.UI[name]) {
+        this.state.enables[u] = this.UI[`${u}EnableDiv`].checked;
+      }
     });
     const saveString = JSON.stringify(this.state);
     localStorage.setItem('shepard_scale', saveString);
@@ -124,7 +138,9 @@ class App {
     this.octaves = this.octaves.filter( (o, i) => {
       o.update(curTime, i, anyRemoved);
       if (o.coda) {
-        this.state.coda += this.getUpgradeValue('codaMult');
+        const codaDelta = this.getUpgradeValue('codaMult');
+        this.state.coda += codaDelta;
+        this.state.totalCoda += codaDelta;
         o.remove();
         anyRemoved = true;
         return false;
@@ -151,6 +167,7 @@ class App {
     this.UI.playTimeSpan.innerText = gameTimeStr;
 
     this.UI.codaCountSpan.innerText = this.state.coda;
+    this.UI.totalCodaSpan.innerText = this.state.totalCoda;
 
     'autoSpeed,autoValue,autoCoda,codaMult'.split`,`.forEach( u => {
       this.UI[`${u}CostDiv`].innerText = this.getUpgradeCost(u);
@@ -243,9 +260,10 @@ class App {
       const costDiv = this.createElement('div', `${u}CostDiv`, upgradeGrid, '', '');
       const curValue = this.createElement('div', `${u}ValueDiv`, upgradeGrid, '', 'value');
       if (u !== 'codaMult') {
-        const enabled = this.createElement('input', `${u}EnableDiv`, upgradeGrid, '', 'enable');
+        const enabled = this.createElement('input', `${u}EnableDiv`, upgradeGrid, 'gCheckboxEnable', 'enable');
         enabled.type = 'checkbox';
-        enabled.checked = true;
+        enabled.checked = this.state.enables[u];
+
       }
 
       rowButton.onclick = () => this.buyUpgrade(u);
@@ -254,6 +272,15 @@ class App {
 
     const playTimeDiv = this.createElement('div', 'playTimeDiv', this.UI.staticWindow, '', 'Total play time: ');
     const playTimeSpan = this.createElement('span', 'playTimeSpan', playTimeDiv, '', '');
+
+    const totalCodaDiv = this.createElement('div', 'totalCodaDiv', this.UI.staticWindow, '', 'Total coda: ');
+    const totalCodaSpan = this.createElement('span', 'totalCodaSpan', totalCodaDiv, '', '');
+
+    const resetButton = this.createElement('button', 'resetButton', this.UI.staticWindow, 'buttonUtil', 'Reset game');
+    resetButton.onclick = () => this.UI.resetContainer.style.display = 'block';
+
+    this.UI.resetNo.onclick = () => this.UI.resetContainer.style.display = 'none';
+    this.UI.resetYes.onclick = () => this.reset();
   }
 
   getUpgradeValue(type) {
