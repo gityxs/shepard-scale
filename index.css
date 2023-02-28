@@ -31,7 +31,7 @@ body {
 
 h1 {
   background: hsla(0, 0%, 100%, 0.5);
-  width: fit-content;
+  width: max-content;
   padding: 0.1em 0.2em;
   box-shadow: 2px 2px 3px 0px black;
 }
@@ -99,6 +99,14 @@ button {
   box-shadow: inset 1px 1px 1px 0px;
 }
 
+#legendDiv {
+  margin-top: 1em;
+}
+
+#legendUl {
+  margin-top: 0px;
+}
+
 #octaveColumn {
 }
 
@@ -114,9 +122,14 @@ button {
   box-shadow: 2px 2px 3px 0px black;
 }
 
+.oLabelContainer {
+  display: grid;
+  grid-template-columns: 99fr 1fr;
+}
+
 .oLabel {
   background: hsla(0, 0%, 0%, 0.2);
-  width: fit-content;
+  width: max-content;
   padding: 0.1em 0.2em;
   box-shadow: 2px 2px 3px 0px black;
 }

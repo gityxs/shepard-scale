@@ -2,8 +2,8 @@
 
 /*
 TODO:
-better tune octave options
-  not all octaves have the same properties
+add some kind of soft ending
+tune global upgrades
 */
 
 class App {
@@ -12,6 +12,10 @@ class App {
     division: '\u{00F7}',
     arrow: '\u{1F8A0}'
   };
+
+  static upgradeNames = ['autoSpeed', 'autoValue', 'autoCoda', 'codaMult'];
+  static upgradeEnableNames = ['autoSpeed', 'autoValue', 'autoCoda'];
+  static enableNames = ['particles', 'audio'];
 
 
   constructor() {
@@ -43,8 +47,8 @@ class App {
 
     this.audioInterface = new AudioInterface();
 
-    setInterval(() => this.tick(), 1000/60);
-    setInterval(() => this.saveToStorage(), 5000);
+    setInterval(() => this.tick(), 1000/30);
+    //setInterval(() => this.saveToStorage(), 5000);
 
     //this.nextNote = 0;
     //setInterval(() => this.playNextNote(), 1000);
@@ -114,7 +118,7 @@ class App {
         this.state.enables[u] = this.UI[name].checked;
       }
     });
-    'particles,audio'.split`,`.forEach( e => {
+    App.enableNames.forEach( e => {
       const name = `${e}EnableDiv`;
       if (this.UI[name]) {
         this.state.enables[e] = this.UI[name].checked;
@@ -137,18 +141,22 @@ class App {
   update() { 
     const curTime = (new Date()).getTime() / 1000;
 
-    'autoSpeed,autoValue,autoCoda'.split`,`.forEach( u => {
-      const lastName = u + 'Last';
-      const upgradeName = this.autoUpgradeToName(u);
+    const lastSuffix = 'Last';
+    const percentSuffix = 'Percent';
+    App.upgradeEnableNames.forEach( u => {
+      const lastName = u + lastSuffix;
+      const upgradeName = Octave.upgradeToNameMap[u];
       const timeElapsed = curTime - this.state[lastName];
       const maxTime = this.getUpgradeValue(u);
       const percent = Math.min(100 * timeElapsed / maxTime, 100);
-      const percentName = u + 'Percent';
+      const percentName = u + percentSuffix;
       this.state[percentName] = percent;
       if (timeElapsed >= maxTime) {
         this.state[lastName] = curTime;
         if (this.UI[`${u}EnableDiv`].checked) {
           this.octaves.some( o => {
+            //squares can't auto
+            if (o.types.square) {return false;}
             const bought = o.buyUpgrade(upgradeName);
             if (bought && document.body.animate && this.UI.particlesEnableDiv.checked) {
               const fromRect = this.UI[`${u}ProgressContainer`].getBoundingClientRect();
@@ -167,8 +175,9 @@ class App {
       o.update(curTime, i, anyRemoved);
       if (o.coda) {
         const codaDelta = this.getUpgradeValue('codaMult');
-        this.state.coda += codaDelta;
-        this.state.totalCoda += codaDelta;
+        const tensMult = o.types.ten ? 10 : 1;
+        this.state.coda += codaDelta * tensMult;
+        this.state.totalCoda += 1;
         o.remove();
         anyRemoved = true;
         return false;
@@ -197,13 +206,16 @@ class App {
     this.UI.codaCountSpan.innerText = this.state.coda;
     this.UI.totalCodaSpan.innerText = this.state.totalCoda;
 
-    'autoSpeed,autoValue,autoCoda,codaMult'.split`,`.forEach( u => {
+    App.upgradeNames.forEach( u => {
       this.UI[`${u}CostDiv`].innerText = this.getUpgradeCost(u);
       this.UI[`${u}ValueDiv`].innerText = this.getUpgradeValue(u);
       const percentName = u + 'Percent';
       const progress = this.state[percentName];
       this.UI[`${u}ProgressBar`].style.width = `${progress}%`;
     });
+
+    const audioText = (this.UI.audioEnableDiv.checked && !this.audioInterface.userEngagement) ? ' (Click anywhere to start)' : '';
+    this.UI.audioEnableLabel.innerText = `Enable audio${audioText}`;
 
   }
 
@@ -281,7 +293,7 @@ class App {
     const upgradeGridL3 = this.createElement('div', 'globalUpgradeGridL3', upgradeGrid, '', 'Value');
     const upgradeGridL4 = this.createElement('div', 'globalUpgradeGridL4', upgradeGrid, '', 'Enable');
 
-    'autoSpeed,autoValue,autoCoda,codaMult'.split`,`.forEach( u => {
+    App.upgradeNames.forEach( u => {
       const progressContainer = this.createElement('div', `${u}ProgressContainer`, upgradeGrid, 'gProgressContainer', '');
       const progressBar = this.createElement('div', `${u}ProgressBar`, progressContainer, 'gProgressBar', '');
       const rowButton = this.createElement('button', `${u}Button`, upgradeGrid, 'buttonGlobalUpgrade', (u === 'codaMult' ? '+' : '-') + u);
@@ -301,10 +313,10 @@ class App {
     const playTimeDiv = this.createElement('div', 'playTimeDiv', this.UI.staticWindow, '', 'Total play time: ');
     const playTimeSpan = this.createElement('span', 'playTimeSpan', playTimeDiv, '', '');
 
-    const totalCodaDiv = this.createElement('div', 'totalCodaDiv', this.UI.staticWindow, '', 'Total coda: ');
+    const totalCodaDiv = this.createElement('div', 'totalCodaDiv', this.UI.staticWindow, '', 'Total coda times: ');
     const totalCodaSpan = this.createElement('span', 'totalCodaSpan', totalCodaDiv, '', '');
 
-    'particles,audio'.split`,`.forEach( e => {
+    App.enableNames.forEach( e => {
       const container = this.createElement('div', `${e}EnableContainer`, this.UI.staticWindow, '', '');
       const enable = this.createElement('input', `${e}EnableDiv`, container, '', '');
       enable.type = 'checkbox';
@@ -312,8 +324,22 @@ class App {
       const label = this.createElement('span', `${e}EnableLabel`, container, '', `Enable ${e}`);
     });
 
+    const legendDiv = this.createElement('div', 'legendDiv', this.UI.staticWindow, '', 'Flag legend:');
+    const legendUl = this.createElement('ul', 'legendUl', legendDiv, '', '');
+    [
+      {symbol: Octave.typeSymbols.prime, desc: 'Prime - cost multiplied by 13'},
+      {symbol: Octave.typeSymbols.even, desc: 'Even - cost divided by 2'},
+      {symbol: Octave.typeSymbols.ten, desc: 'Ten - coda gain multiplied by 10'},
+      {symbol: Octave.typeSymbols.square, desc: 'Square - ineligible for auto'},
+      {symbol: Octave.typeSymbols.triangle, desc: 'Triangle - speed divided by 3'}
+    ].forEach( (d, i) => {
+      this.createElement('li', `descli${i}`, legendUl, '', `${d.symbol} - ${d.desc}`);
+    });
+
     const resetButton = this.createElement('button', 'resetButton', this.UI.staticWindow, 'buttonUtil', 'Reset game');
     resetButton.onclick = () => this.UI.resetContainer.style.display = 'block';
+
+    const thanksDiv = this.createElement('div', 'thanksDiv', this.UI.staticWindow, '', 'Special thanks to Milk Rabbit for the inspiration!');
 
     this.UI.resetNo.onclick = () => this.UI.resetContainer.style.display = 'none';
     this.UI.resetYes.onclick = () => this.reset();
@@ -384,12 +410,24 @@ class App {
 
 class Octave {
   static upgrades = {
-    speed: {baseCost: 1, costFactor: 1.1, basePower: 1, powerFactor: 1.2},
-    value: {baseCost: 1, costFactor: 1.1, basePower: 1, powerFactor: 1.2},
-    coda: {baseCost: 1, costFactor: Infinity}
+    speed: {baseCost: 1, costFactor: 1.2, basePower: 10, powerFactor: 1.15},
+    value: {baseCost: 1, costFactor: 1.2, basePower: 1, powerFactor: 1.15},
+    coda: {baseCost: 1000, costFactor: Infinity}
   };
 
+  static timescaleBases = [1, 3, 8, 20, 50, 150, 400, 1150, 3500, 12800, Infinity];
+
   static noteFreqs = [ 261.63,277.18,293.66,311.13,329.63,349.23,369.99,392.00,415.30,440.00,466.16,493.88 ];
+
+  static typeSymbols = {
+    prime: 'P',
+    even: '2',
+    ten: '0',
+    square: '\u{25A1}',
+    triangle: '\u{25B3}'
+  };
+
+  static upgradeToNameMap = {autoSpeed: 'speed', autoValue: 'value', autoCoda: 'coda'};
 
   constructor(app, index, parentElement, state) {
     this.app = app;
@@ -397,6 +435,20 @@ class Octave {
     this.noteIndex = index % 12;
     this.parentElement = parentElement;
     this.coda = false;
+
+    //primes cost 13x more
+    //evens cost 1/2 as much
+    //tens give more coda
+    //squares can't auto
+    //triangles are slower 
+    this.types = {
+      prime: this.isPrime(),
+      even: this.isEven(),
+      ten: this.isTen(),
+      square: this.isSquare(),
+      triangle: this.isTriangular()
+    };
+
 
     this.colors = {};
 
@@ -451,7 +503,14 @@ class Octave {
   genHTML() {
     const topContainer = this.createElement('div', 'oContainer', this.parentElement, '', '');
 
-    const labelDiv = this.createElement('div', 'oLabel', topContainer, '', `Octave ${this.index}`);
+    const labelContainer = this.createElement('div', 'oLabelContainer', topContainer, '', '');
+    const labelDiv = this.createElement('div', 'oLabel', labelContainer, '', `Octave ${this.index}`);
+
+    
+    const flagText = Object.keys(this.types).reduce( (acc, e) => {
+      return acc + (this.types[e] ? Octave.typeSymbols[e] : '');
+    }, '');
+    const flagDiv = this.createElement('div', 'oFlagContainer', labelContainer, '', flagText);
 
     const statDiv = this.createElement('div', 'oStatDiv', topContainer, '', '');
     const statCountDiv = this.createElement('div', 'oStatCountDiv', statDiv, '', `Total ${App.symbols.note}:`);
@@ -527,11 +586,12 @@ class Octave {
   }
 
   getCurrentRate() {
-    return Math.round(10 * Math.pow(1.2, this.state.upgradeLevels.speed));
+    const triFactor = this.types.triangle ? (1/3) : 1;
+    return Math.round(triFactor * Octave.upgrades.speed.basePower * Math.pow(Octave.upgrades.speed.powerFactor, this.state.upgradeLevels.speed));
   }
 
   getCurrentValue() {
-    return Math.round(1 * Math.pow(1.2, this.state.upgradeLevels.value));
+    return Math.round(Octave.upgrades.value.basePower * Math.pow(Octave.upgrades.value.powerFactor, this.state.upgradeLevels.value));
   }
 
   getTimescale(stackIndex) {
@@ -541,7 +601,7 @@ class Octave {
     const timescale = Math.max(0, A*Math.pow(Math.E, -stackIndex) + (1 - A));
     return timescale;
     */
-    return 1/([1, 3, 8, 20, 50, 150, 400, 1150, 3500, 12800, Infinity][stackIndex]);
+    return 1/Octave.timescaleBases[stackIndex];
   }
 
   update(curTime, stackIndex, snapshot) {
@@ -569,8 +629,11 @@ class Octave {
         const baseVol = Math.pow(1 - (this.noteIndex / 12), 2);
         const highVol = Math.pow(this.noteIndex / 12, 2);
 
-        this.app.audioInterface.playFreq(Octave.noteFreqs[this.noteIndex], 0.5, {mainVolume: highVol * 0.1});
-        this.app.audioInterface.playFreq(Octave.noteFreqs[this.noteIndex] * 2, 0.5, {mainVolume: baseVol * 0.1});
+        //this.app.audioInterface.playFreq(Octave.noteFreqs[this.noteIndex], 0.5, {mainVolume: highVol * 0.05});
+        //this.app.audioInterface.playFreq(Octave.noteFreqs[this.noteIndex] * 2, 0.5, {mainVolume: baseVol * 0.05});
+
+        this.app.audioInterface.playNotes(Octave.noteFreqs[this.noteIndex], highVol * 0.05, 
+          Octave.noteFreqs[this.noteIndex] * 2, baseVol * 0.05, 0.5);
       }
     }
 
@@ -640,7 +703,9 @@ class Octave {
 
   getUpgradeCost(type) {
     const typeInfo = Octave.upgrades[type];
-    return Math.round(typeInfo.baseCost * Math.pow(typeInfo.costFactor, this.state.upgradeLevels[type]));
+    const primeCost = this.types.prime ? 13 : 1;
+    const evenCost = this.types.even ? 0.5 : 1;
+    return Math.max(1, Math.round(evenCost * primeCost * typeInfo.baseCost * Math.pow(typeInfo.costFactor, this.state.upgradeLevels[type])));
   }
 
   buyUpgrade(type) {
@@ -655,113 +720,115 @@ class Octave {
     }
     return false;
   }
+
+  isPrime() {
+    if (this.index < 2) {return false;}
+    if (this.index === 2) {return true;}
+    const limit = Math.floor(Math.sqrt(this.index));
+    if (this.index % 2 === 0) {return false;}
+    for (let factor = 3; factor <= limit; factor += 2) {
+      if (this.index % factor === 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  isEven() {
+    if (this.index === 0) {return false};
+    return this.index % 2 === 0;
+  }
+
+  isTen() {
+    if (this.index === 0) {return false};
+    return this.index % 10 === 0;
+  }
+
+  isSquare() {
+    if (this.index < 2) {return false};
+    const sqrt = Math.floor(Math.sqrt(this.index));
+    return sqrt * sqrt === this.index;
+  }
+
+  isTriangular() {
+    if (this.index < 2) {return false};
+    const d = this.index * 2;
+    const base = Math.floor(Math.sqrt(d));
+    return (base * (base + 1)) === d;
+  }
 }
 
 class AudioInterface {
   constructor() {
+    this.userEngagement = false;
+    document.onclick = () => this.userEngagement = true;
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    this.samplesDB = {};
   }
 
-  playFreq(freq, duration, passedOpts) {
+  playNotes(freq1, vol1, freq2, vol2, duration, passedOpts) {
     const audioCtx = this.ctx;
+
+    if (!this.userEngagement) {return;}
+
+
     const sampleRate = audioCtx.sampleRate;
   
     let myArrayBuffer;
-    if (this.samplesDB[freq] === undefined) {
 
-      const options = {...{
-        type: 'sine',
-        fadeInTime: 0.05,
-        mainVolume: 0.1,
-        channels: 1,
-        continuous: false,
-        side: 3, //0 = none, 1 = left, 2 = right, 3 = both
-        t0: 0, //initial time
-        a0: [0] //initial value
-      }, ...passedOpts};
+    const options = {...{
+      fadeInTime: 0.01,
+      mainVolume: 0.05,
+      channels: 1,
+      continuous: false,
+      side: 3, //0 = none, 1 = left, 2 = right, 3 = both
+      t0: 0, //initial time
+      a0: [0] //initial value
+    }, ...passedOpts};
 
-      const fadeInSamples = options.fadeInTime *  sampleRate;
+    const fadeInSamples = options.fadeInTime *  sampleRate;
 
-      const frameCount = audioCtx.sampleRate * duration;
+    const frameCount = audioCtx.sampleRate * duration;
 
-      myArrayBuffer = audioCtx.createBuffer(options.channels, frameCount, audioCtx.sampleRate);
-      //const finalValues = (new Array(options.channels)).fill(0);
-      for (let channel = 0; channel < options.channels; channel++) {
-    
-        if (((1 << channel) & options.side) === 0) {continue;} 
-    
-        // This gives us the actual array that contains the data
-        const nowBuffering = myArrayBuffer.getChannelData(channel);
+    myArrayBuffer = audioCtx.createBuffer(options.channels, frameCount, audioCtx.sampleRate);
+    //const finalValues = (new Array(options.channels)).fill(0);
+    for (let channel = 0; channel < options.channels; channel++) {
+  
+      if (((1 << channel) & options.side) === 0) {continue;} 
+  
+      // This gives us the actual array that contains the data
+      const nowBuffering = myArrayBuffer.getChannelData(channel);
 
-        const components = [
-          {type: options.type, freq: freq, vol: 1.0}
-        ];
-        const totalVolume = components.reduce((a,e) => a + e.vol, 0);
-        const volumeScale = options.mainVolume / totalVolume;
-        components.forEach(component => {
-          for (let i = 0; i < frameCount; i++) {
-            // audio needs to be in [-1.0; 1.0]
-            const t = i / sampleRate;
-            let vol;
-            if (options.continuous) {
-              vol = component.vol;
+      const components = [
+        {freq: freq1, vol: vol1},
+        {freq: freq2, vol: vol2}
+      ];
+      const totalVolume = components.reduce((a,e) => a + e.vol, 0);
+      const volumeScale = options.mainVolume / totalVolume;
+      components.forEach(component => {
+        for (let i = 0; i < frameCount; i++) {
+          // audio needs to be in [-1.0; 1.0]
+          const t = i / sampleRate;
+          let vol;
+          if (options.continuous) {
+            vol = component.vol;
+          } else {
+            const fadeSamples = sampleRate * options.fadeInTime;
+            //this fade is tiny just to avoid clipping on start/stop
+            if (i < fadeSamples) {
+              vol = component.vol * i / fadeSamples;
+            } else if ((i + fadeSamples) > frameCount) {
+              vol = component.vol * (frameCount - i) / fadeSamples;
             } else {
-              const fadeSamples = sampleRate * 0.01;
-              //this fade is tiny just to avoid clipping on start/stop
-              if (i < fadeSamples) {
-                vol = component.vol * i / fadeSamples;
-              } else if (i + fadeSamples > frameCount) {
-                vol = component.vol * (frameCount - i) / fadeSamples;
-              } else {
-                vol = component.vol;
-              }
+              vol = component.vol;
             }
-         
-            if (i < fadeInSamples) {
-              vol *= vol * i / fadeInSamples;
-            }
-
-            if (i > (frameCount - fadeInSamples)) {
-              vol *= vol * (frameCount - i) / fadeInSamples;
-            }
-         
-            switch (component.type) {
-              case 'sine':
-                const freq = component.freq;
-                nowBuffering[i] += volumeScale * vol * Math.sin(freq * 2 * Math.PI * (t + options.t0));
-                break;
-              case 'seq':
-                component.notes.forEach( note => {           
-                  if (t >= note.start && t < note.stop) {
-                    const fadeTime = 0.1;
-                    const fadeVolume = Math.tanh((t-fadeTime/2)*6/fadeTime)+1;
-                    nowBuffering[i] += fadeVolume * volumeScale * vol * Math.sin(note.freq * 2 * Math.PI * t);
-                  }
-                });
-                break;
-              case 'rnd':
-                if (i === 0) {
-                  nowBuffering[i] += options.a0[channel]; //volumeScale * vol * (Math.random() * 2 - 1);
-                } else {           
-                  const Fc = component.freq; //corner frequency of filter
-                  const Ts = sampleRate; //sampling period
-                  const RC = 1 / (2 * Math.PI * Fc);  //time constant
-                  const alpha = (1/Ts) / (RC + 1/Ts); //smoothing factor
-                  const newVal = volumeScale * vol * (Math.random() * 2 - 1);
-                  nowBuffering[i] += alpha * newVal + (1-alpha) * nowBuffering[i-1];
-                }
-                break;
-            }
-           //finalValues[channel] = nowBuffering[i];
           }
-        });
-      }  
+       
+          const freq = component.freq;
+          nowBuffering[i] += volumeScale * vol * Math.sin(freq * 2 * Math.PI * (t + options.t0));
+        }
+      });
+    }  
 
-      this.samplesDB[freq] = myArrayBuffer;
-    } else {
-      myArrayBuffer = this.samplesDB[freq];
-    }
     // Get an AudioBufferSourceNode.
     // This is the AudioNode to use when we want to play an AudioBuffer
     var source = audioCtx.createBufferSource();
@@ -773,7 +840,6 @@ class AudioInterface {
     // start the source playing
     
     source.start(audioCtx.currentTime);
-    //return finalValues;
   }
 }
 
