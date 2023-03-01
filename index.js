@@ -4,6 +4,7 @@
 TODO:
 add some kind of soft ending
 tune global upgrades
+add global speed and value boost upgrades
 */
 
 class App {
@@ -13,8 +14,8 @@ class App {
     arrow: '\u{1F8A0}'
   };
 
-  static upgradeNames = ['autoSpeed', 'autoValue', 'autoCoda', 'codaMult'];
-  static upgradeEnableNames = ['autoSpeed', 'autoValue', 'autoCoda'];
+  static upgradeNames = ['autoTempo', 'autoVolume', 'autoCoda', 'codaMult'];
+  static upgradeEnableNames = ['autoTempo', 'autoVolume', 'autoCoda'];
   static enableNames = ['particles', 'audio'];
 
 
@@ -24,10 +25,10 @@ class App {
     this.maxOctaveIndex = -1;
 
     this.upgrades = {
-      autoSpeed: {baseCost: 2, costFactor: 2, basePower: 60, powerFactor: 0.9},
-      autoValue: {baseCost: 2, costFactor: 2, basePower: 60, powerFactor: 0.9},
-      autoCoda: {baseCost: 2, costFactor: 2, basePower: 60, powerFactor: 0.9},
-      codaMult: {baseCost: 2, costFactor: 2, basePower: 1, powerFactor: 1.2}
+      autoTempo: {baseCost: 2, costFactor: 1.3, basePower: 60, powerFactor: 0.8},
+      autoVolume: {baseCost: 2, costFactor: 1.3, basePower: 60, powerFactor: 0.8},
+      autoCoda: {baseCost: 2, costFactor: 1.3, basePower: 60, powerFactor: 0.8},
+      codaMult: {baseCost: 2, costFactor: 1.3, basePower: 1, powerFactor: 1.2}
     };
 
     'octaveList,staticWindow,resetContainer,resetYes,resetNo'.split`,`.forEach( id => {
@@ -48,7 +49,7 @@ class App {
     this.audioInterface = new AudioInterface();
 
     setInterval(() => this.tick(), 1000/30);
-    //setInterval(() => this.saveToStorage(), 5000);
+    setInterval(() => this.saveToStorage(), 5000);
 
     //this.nextNote = 0;
     //setInterval(() => this.playNextNote(), 1000);
@@ -75,17 +76,17 @@ class App {
       coda: 0,
       totalCoda: 0,
       upgradeLevels: {
-        autoSpeed: 0,
-        autoValue: 0,
+        autoTempo: 0,
+        autoVolume: 0,
         autoCoda: 0,
         codaMult: 0
       },
-      autoSpeedLast: 0,
-      autoValueLast: 0,
+      autoTempoLast: 0,
+      autoVolumeLast: 0,
       autoCodaLast: 0,
       enables: {
-        autoSpeed: true,
-        autoValue: true,
+        autoTempo: true,
+        autoVolume: true,
         autoCoda: true,
         particles: true,
         audio: true
@@ -112,7 +113,7 @@ class App {
     this.octaves.forEach( o => {
       this.state.octaves.push(o.state);
     });
-    'autoSpeed,autoValue,autoCoda'.split`,`.forEach( u => {
+    'autoTempo,autoVolume,autoCoda'.split`,`.forEach( u => {
       const name = `${u}EnableDiv`;
       if (this.UI[name]) {
         this.state.enables[u] = this.UI[name].checked;
@@ -208,7 +209,7 @@ class App {
 
     App.upgradeNames.forEach( u => {
       this.UI[`${u}CostDiv`].innerText = this.getUpgradeCost(u);
-      this.UI[`${u}ValueDiv`].innerText = this.getUpgradeValue(u);
+      this.UI[`${u}VolumeDiv`].innerText = this.getUpgradeValue(u);
       const percentName = u + 'Percent';
       const progress = this.state[percentName];
       this.UI[`${u}ProgressBar`].style.width = `${progress}%`;
@@ -290,15 +291,16 @@ class App {
     const upgradeGridL0 = this.createElement('div', 'globalUpgradeGridL0', upgradeGrid, '', 'Progress');
     const upgradeGridL1 = this.createElement('div', 'globalUpgradeGridL1', upgradeGrid, '', 'Buy');
     const upgradeGridL2 = this.createElement('div', 'globalUpgradeGridL2', upgradeGrid, '', 'Cost (coda)');
-    const upgradeGridL3 = this.createElement('div', 'globalUpgradeGridL3', upgradeGrid, '', 'Value');
+    const upgradeGridL3 = this.createElement('div', 'globalUpgradeGridL3', upgradeGrid, '', 'Volume');
     const upgradeGridL4 = this.createElement('div', 'globalUpgradeGridL4', upgradeGrid, '', 'Enable');
 
     App.upgradeNames.forEach( u => {
       const progressContainer = this.createElement('div', `${u}ProgressContainer`, upgradeGrid, 'gProgressContainer', '');
       const progressBar = this.createElement('div', `${u}ProgressBar`, progressContainer, 'gProgressBar', '');
-      const rowButton = this.createElement('button', `${u}Button`, upgradeGrid, 'buttonGlobalUpgrade', (u === 'codaMult' ? '+' : '-') + u);
+      //const rowButton = this.createElement('button', `${u}Button`, upgradeGrid, 'buttonGlobalUpgrade', (u === 'codaMult' ? '+' : '-') + u);
+      const rowButton = this.createElement('button', `${u}Button`, upgradeGrid, 'buttonGlobalUpgrade', '+' + u);
       const costDiv = this.createElement('div', `${u}CostDiv`, upgradeGrid, '', '');
-      const curValue = this.createElement('div', `${u}ValueDiv`, upgradeGrid, '', 'value');
+      const curVolume = this.createElement('div', `${u}VolumeDiv`, upgradeGrid, '', 'value');
       if (u !== 'codaMult') {
         const enabled = this.createElement('input', `${u}EnableDiv`, upgradeGrid, 'gCheckboxEnable', 'enable');
         enabled.type = 'checkbox';
@@ -331,7 +333,7 @@ class App {
       {symbol: Octave.typeSymbols.even, desc: 'Even - cost divided by 2'},
       {symbol: Octave.typeSymbols.ten, desc: 'Ten - coda gain multiplied by 10'},
       {symbol: Octave.typeSymbols.square, desc: 'Square - ineligible for auto'},
-      {symbol: Octave.typeSymbols.triangle, desc: 'Triangle - speed divided by 3'}
+      {symbol: Octave.typeSymbols.triangle, desc: 'Triangle - tempo divided by 3'}
     ].forEach( (d, i) => {
       this.createElement('li', `descli${i}`, legendUl, '', `${d.symbol} - ${d.desc}`);
     });
@@ -368,7 +370,7 @@ class App {
   }
 
   autoUpgradeToName(type) {
-    return {autoSpeed: 'speed', autoValue: 'value', autoCoda: 'coda'}[type];
+    return {autoTempo: 'tempo', autoVolume: 'value', autoCoda: 'coda'}[type];
   }
 
   createUpgradeParticle(x1, y1, x2, y2) {
@@ -410,7 +412,7 @@ class App {
 
 class Octave {
   static upgrades = {
-    speed: {baseCost: 1, costFactor: 1.2, basePower: 10, powerFactor: 1.15},
+    tempo: {baseCost: 1, costFactor: 1.2, basePower: 10, powerFactor: 1.15},
     value: {baseCost: 1, costFactor: 1.2, basePower: 1, powerFactor: 1.15},
     coda: {baseCost: 1000, costFactor: Infinity}
   };
@@ -427,7 +429,7 @@ class Octave {
     triangle: '\u{25B3}'
   };
 
-  static upgradeToNameMap = {autoSpeed: 'speed', autoValue: 'value', autoCoda: 'coda'};
+  static upgradeToNameMap = {autoTempo: 'tempo', autoVolume: 'value', autoCoda: 'coda'};
 
   constructor(app, index, parentElement, state) {
     this.app = app;
@@ -473,7 +475,7 @@ class Octave {
         rate: 10,
         baseTime: (new Date()).getTime() / 1000,
         upgradeLevels: {
-          speed: 0,
+          tempo: 0,
           value: 0,
           coda: 0
         }
@@ -515,10 +517,10 @@ class Octave {
     const statDiv = this.createElement('div', 'oStatDiv', topContainer, '', '');
     const statCountDiv = this.createElement('div', 'oStatCountDiv', statDiv, '', `Total ${App.symbols.note}:`);
     const statCountSpan = this.createElement('span', 'oStatCountSpan', statCountDiv, '', '');
-    const statSpeedDiv = this.createElement('div', 'oStatSpeedDiv', statDiv, '', 'Speed:');
-    const statSpeedSpan = this.createElement('span', 'oStatSpeedSpan', statSpeedDiv, '', '');
-    const statValueDiv = this.createElement('div', 'oStatValueDiv', statDiv, '', 'Value:');
-    const statValueSpan = this.createElement('span', 'oStatValueSpan', statValueDiv, '', '');
+    const statTempoDiv = this.createElement('div', 'oStatTempoDiv', statDiv, '', 'Tempo:');
+    const statTempoSpan = this.createElement('span', 'oStatTempoSpan', statTempoDiv, '', '');
+    const statVolumeDiv = this.createElement('div', 'oStatVolumeDiv', statDiv, '', 'Volume:');
+    const statVolumeSpan = this.createElement('span', 'oStatVolumeSpan', statVolumeDiv, '', '');
 
     const progressContainer = this.createElement('div', 'oProgressContainer', topContainer,
       '', '');
@@ -528,19 +530,19 @@ class Octave {
     const upgradeContainer = this.createElement('div', 'oUpgradeContainer', topContainer,
       '', '');
 
-    const speedButton = this.createElement('button', 'oButtonSpeed', upgradeContainer,
-      '', '+Speed');
+    const tempoButton = this.createElement('button', 'oButtonTempo', upgradeContainer,
+      '', '+Tempo');
 
-    const valueButton = this.createElement('button', 'oButtonValue', upgradeContainer,
-      '', '+Value');
+    const valueButton = this.createElement('button', 'oButtonVolume', upgradeContainer,
+      '', '+Volume');
 
     const codaButton = this.createElement('button', 'oButtonCoda', upgradeContainer,
       '', 'Coda');
 
-    speedButton.onclick = () => this.buyUpgrade('speed');
+    tempoButton.onclick = () => this.buyUpgrade('tempo');
     valueButton.onclick = () => this.buyUpgrade('value');
     codaButton.onclick = () => this.buyUpgrade('coda');
-    [speedButton, valueButton, codaButton].forEach( b => {
+    [tempoButton, valueButton, codaButton].forEach( b => {
       b.onmouseenter = () => this.buttonHoverStart(b);
       b.onmouseleave = () => this.buttonHoverEnd(b);
       b.onmousedown = () => this.buttonDown(b);
@@ -587,7 +589,7 @@ class Octave {
 
   getCurrentRate() {
     const triFactor = this.types.triangle ? (1/3) : 1;
-    return Math.round(triFactor * Octave.upgrades.speed.basePower * Math.pow(Octave.upgrades.speed.powerFactor, this.state.upgradeLevels.speed));
+    return Math.round(triFactor * Octave.upgrades.tempo.basePower * Math.pow(Octave.upgrades.tempo.powerFactor, this.state.upgradeLevels.tempo));
   }
 
   getCurrentValue() {
@@ -638,20 +640,20 @@ class Octave {
     }
 
 
-    this.UI.oButtonSpeed.disabled = this.getUpgradeCost('speed') > this.state.count;
-    this.UI.oButtonValue.disabled = this.getUpgradeCost('value') > this.state.count;
+    this.UI.oButtonTempo.disabled = this.getUpgradeCost('tempo') > this.state.count;
+    this.UI.oButtonVolume.disabled = this.getUpgradeCost('value') > this.state.count;
     this.UI.oButtonCoda.disabled = this.getUpgradeCost('coda') > this.state.count;
   }
 
   draw() {
     this.UI.oStatCountSpan.innerText = this.state.count;
     if (this.curStackIndex === 0) {
-      this.UI.oStatSpeedSpan.innerText = `${this.getCurrentRate()}`;
+      this.UI.oStatTempoSpan.innerText = `${this.getCurrentRate()}`;
     } else {
       const timescale = this.getTimescale(this.curStackIndex);
-      this.UI.oStatSpeedSpan.innerText = `${this.getCurrentRate()} ( ${App.symbols.division} ${(1/timescale).toFixed(0)})`;
+      this.UI.oStatTempoSpan.innerText = `${this.getCurrentRate()} ( ${App.symbols.division} ${(1/timescale).toFixed(0)})`;
     }
-    this.UI.oStatValueSpan.innerText = this.getCurrentValue();
+    this.UI.oStatVolumeSpan.innerText = this.getCurrentValue();
     if (this.getCurrentRate() < 1000) {
       this.UI.oProgressBar.style.width = `${this.state.percent}%`;
       this.UI.oProgressContainer.style.filter = '';
@@ -659,8 +661,8 @@ class Octave {
       this.UI.oProgressBar.style.width = `100%`;
       this.UI.oProgressContainer.style.filter = 'blur(2px)';
     }
-    this.UI.oButtonSpeed.innerText = `+Speed ${App.symbols.note} ${this.getUpgradeCost('speed')}`;
-    this.UI.oButtonValue.innerText = `+Value ${App.symbols.note} ${this.getUpgradeCost('value')}`;
+    this.UI.oButtonTempo.innerText = `+Tempo ${App.symbols.note} ${this.getUpgradeCost('tempo')}`;
+    this.UI.oButtonVolume.innerText = `+Volume ${App.symbols.note} ${this.getUpgradeCost('value')}`;
     this.UI.oButtonCoda.innerText = `+Coda ${App.symbols.note} ${this.getUpgradeCost('coda')}`;
   }
 
