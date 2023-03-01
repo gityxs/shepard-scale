@@ -165,10 +165,11 @@ button {
   background: white;
   margin: 5em;
   padding: 5em;
+  box-shadow: 2px 2px 3px 0px black;
 }
 
 #resetButton {
-  margin-top: 5em;
+  margin-top: 1em;
 }
 
 .particle {
@@ -178,4 +179,13 @@ button {
   pointer-events: none;
   opacity: 0;
   font-size: 20pt;
+}
+
+#endGameContainer {
+  display: none;
+  position: absolute;
+  background: white;
+  margin: 5em;
+  padding: 5em;
+  box-shadow: 2px 2px 3px 0px black;
 }
