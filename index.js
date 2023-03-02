@@ -199,6 +199,10 @@ class App {
 
       this.state.endGameSeen = true;
     }
+
+    App.upgradeNames.forEach( u => {
+      this.UI[`${u}Button`].disabled = this.getUpgradeCost(u) > this.state.coda;
+    });
   }
 
   draw() {
@@ -212,7 +216,7 @@ class App {
     this.UI.playTimeSpan.innerText = gameTimeStr;
 
     this.UI.codaCountSpan.innerText = this.state.coda;
-    this.UI.totalCodaSpan.innerText = `${this.state.totalCoda} / 10000`;
+    this.UI.totalCodaSpan.innerText = `${this.state.totalCoda} / 10000 (tempo x ${this.getGlobalTempoScale()})`;
 
     App.upgradeNames.forEach( u => {
       this.UI[`${u}CostDiv`].innerText = this.getUpgradeCost(u);
@@ -336,8 +340,8 @@ class App {
     const legendDiv = this.createElement('div', 'legendDiv', this.UI.staticWindow, '', 'Legend:');
     const legendUl = this.createElement('ul', 'legendUl', legendDiv, '', '');
     [
-      {symbol: Octave.typeSymbols.prime, desc: 'Prime - cost divided by 3'},
-      {symbol: Octave.typeSymbols.even, desc: 'Even - cost divided by 2'},
+      {symbol: Octave.typeSymbols.prime, desc: 'Prime - costs divided by 3'},
+      {symbol: Octave.typeSymbols.even, desc: 'Even - costs divided by 2'},
       {symbol: Octave.typeSymbols.ten, desc: 'Ten - coda gain multiplied by 10'},
       {symbol: Octave.typeSymbols.square, desc: 'Square - ineligible for auto'},
       {symbol: Octave.typeSymbols.triangle, desc: 'Triangle - tempo divided by 3'}
@@ -366,6 +370,14 @@ class App {
 
   getUpgradeCost(type) {
     return Math.round(this.upgrades[type].baseCost * Math.pow(this.upgrades[type].costFactor, this.state.upgradeLevels[type]));
+  }
+
+  getGlobalTempoScale() {
+    //when coda = 0, this returns 1
+    //when coda = 10000, this returns 100
+    //uses a flattened exponential in between
+    const d = Math.pow(50, 1/10000);
+    return Math.round((this.state.totalCoda / 200) + Math.pow(d, this.state.totalCoda));
   }
 
   buyUpgrade(type) {
@@ -597,7 +609,8 @@ class Octave {
 
   getCurrentRate() {
     const triFactor = this.types.triangle ? (1/3) : 1;
-    return Math.round(triFactor * Octave.upgrades.tempo.basePower * Math.pow(Octave.upgrades.tempo.powerFactor, this.state.upgradeLevels.tempo));
+    const globalFactor = this.app.getGlobalTempoScale();
+    return Math.round(globalFactor * triFactor * Octave.upgrades.tempo.basePower * Math.pow(Octave.upgrades.tempo.powerFactor, this.state.upgradeLevels.tempo));
   }
 
   getCurrentValue() {
