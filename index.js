@@ -3,14 +3,14 @@
 /*
 TODO:
 tune global upgrades
-make buying arrows not buy until they get to their target
 */
 
 class App {
   static symbols = {
     note: '\u{266A}',
     division: '\u{00F7}',
-    arrow: '\u{1F8A0}'
+    arrow: '\u{1F8A0}',
+    lozenge: '\u{2311}'
   };
 
   static upgradeNames = ['autoCoda', 'autoTempo', 'autoVolume', 'codaMult', 'codaDiv', 'unspentBoost', 'breakSquares'];
@@ -148,15 +148,16 @@ class App {
         this.state[lastName] = curTime;
         if (this.UI[`${u}EnableDiv`].checked) {
           this.octaves.some( o => {
-            //squares can't auto
+            //squares can't auto without upgrade
             if (o.types.square && this.state.upgradeLevels.breakSquares === 0) {return false;}
-            const bought = o.buyUpgrade(upgradeName);
-            if (bought && document.body.animate && this.UI.particlesEnableDiv.checked) {
+            const buyable = o.canBuyUpgrade(upgradeName);
+            if (buyable && document.body.animate && this.UI.particlesEnableDiv.checked) {
               const fromRect = this.UI[`${u}ProgressContainer`].getBoundingClientRect();
-              const toRect = o.UI[`oButton${upgradeName[0].toUpperCase() + upgradeName.substring(1)}`].getBoundingClientRect();
-              this.createUpgradeParticle(fromRect.right, fromRect.top, toRect.right, toRect.top);
+              const toElement = o.UI[`oButton${upgradeName[0].toUpperCase() + upgradeName.substring(1)}`];
+              const toRect = toElement.getBoundingClientRect();
+              this.createUpgradeParticle(fromRect.right, fromRect.top, toRect.right, toRect.top, () => o.buyUpgrade(upgradeName), toElement);
             }
-            return bought;
+            return buyable;
           });
         }
       }
@@ -301,7 +302,7 @@ class App {
     const upgradeGrid = this.createElement('div', 'globalUpgradeGrid', this.UI.staticWindow, '', ''); 
     const upgradeGridL0 = this.createElement('div', 'globalUpgradeGridL0', upgradeGrid, '', 'Progress');
     const upgradeGridL1 = this.createElement('div', 'globalUpgradeGridL1', upgradeGrid, '', 'Buy');
-    const upgradeGridL2 = this.createElement('div', 'globalUpgradeGridL2', upgradeGrid, '', 'Cost (coda)');
+    const upgradeGridL2 = this.createElement('div', 'globalUpgradeGridL2', upgradeGrid, '', 'Cost');
     const upgradeGridL3 = this.createElement('div', 'globalUpgradeGridL3', upgradeGrid, '', 'Volume');
     const upgradeGridL4 = this.createElement('div', 'globalUpgradeGridL4', upgradeGrid, '', 'Enable');
 
@@ -313,7 +314,7 @@ class App {
         const blankBar = this.createElement('div', `${u}BlankProgress`, upgradeGrid);
       }
       //const rowButton = this.createElement('button', `${u}Button`, upgradeGrid, 'buttonGlobalUpgrade', (u === 'codaMult' ? '+' : '-') + u);
-      const rowButton = this.createElement('button', `${u}Button`, upgradeGrid, 'buttonGlobalUpgrade', '+' + u);
+      const rowButton = this.createElement('button', `${u}Button`, upgradeGrid, 'buttonGlobalUpgrade', u);
       const costDiv = this.createElement('div', `${u}CostDiv`, upgradeGrid, '', '');
       const curVolume = this.createElement('div', `${u}VolumeDiv`, upgradeGrid, '', 'volume');
       if (u !== 'codaMult' && u !== 'codaDiv' && u !== 'unspentBoost' && u !== 'breakSquares') {
@@ -421,7 +422,7 @@ class App {
     return {autoTempo: 'tempo', autoVolume: 'volume', autoCoda: 'coda'}[type];
   }
 
-  createUpgradeParticle(x1, y1, x2, y2) {
+  createUpgradeParticle(x1, y1, x2, y2, fn, toElement) {
     const particle = document.createElement('div');
     particle.classList.add('particle');
     particle.innerText = App.symbols.arrow;
@@ -443,17 +444,27 @@ class App {
       },
       {
         transform: `translate(${x2 - size / 2}px, ${y2 - size / 2}px)`,
-        opacity: 0
+        opacity: 1.0
       }
     ], {
-      duration: 2000,
-      easing: 'cubic-bezier(0, .9, .57, 1)',
-      delay: Math.random() * 200
+      duration: 1000,
+      //easing: 'cubic-bezier(0, .9, .57, 1)',
+      easing: 'linear',
+      delay: 0
     });
 
     animation.onfinish = () => {
       particle.remove();
+      fn();
+      app.triggerMouseEvent(toElement, 'mousedown');
+      setTimeout(() => app.triggerMouseEvent(toElement, 'mouseup'), 100);
     };
+  }
+
+  triggerMouseEvent(element, eventType) {
+    const event = document.createEvent('MouseEvents');
+    event.initEvent(eventType, true, true);
+    element.dispatchEvent(event);
   }
 
 }
@@ -761,6 +772,11 @@ class Octave {
     const primeCost = this.types.prime ? 1/3 : 1;
     const evenCost = this.types.even ? 0.5 : 1;
     return Math.max(1, Math.round(evenCost * primeCost * typeInfo.baseCost * Math.pow(typeInfo.costFactor, this.state.upgradeLevels[type])));
+  }
+
+  canBuyUpgrade(type) {
+    const cost = this.getUpgradeCost(type);
+    return this.state.count >= cost;
   }
 
   buyUpgrade(type) {
