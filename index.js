@@ -21,6 +21,9 @@ class App {
   constructor() {
     this.UI = {};
     this.octaves = [];
+    this.playScale = false;
+    this.nextScaleNote = 0;
+    this.nextScaleIndex = 0;
     this.maxOctaveIndex = -1;
 
     this.upgrades = {
@@ -191,6 +194,9 @@ class App {
     if (this.state.totalCoda >= 10000 && !this.state.endGameSeen) {
       this.UI.endGameTimeSpan.innerText = this.UI.playTimeSpan.innerText;
       this.UI.endGameContainer.style.display = 'block';
+      this.playScale = true;
+      this.nextScaleNote = 0;
+      this.nextScaleIndex = 0;
 
       this.state.endGameSeen = true;
     }
@@ -198,6 +204,18 @@ class App {
     App.upgradeNames.forEach( u => {
       this.UI[`${u}Button`].disabled = this.getUpgradeCost(u) > this.state.coda;
     });
+
+    if (this.playScale && this.UI.audioEnableDiv.checked) {
+      if (curTime >= this.nextScaleNote) {
+        const baseVol = Math.pow(1 - (this.nextScaleIndex / 12), 2);
+        const highVol = Math.pow(this.nextScaleIndex / 12, 2);
+        this.audioInterface.playNotes(Octave.noteFreqs[this.nextScaleIndex], highVol * 0.05, 
+          Octave.noteFreqs[this.nextScaleIndex] * 2, baseVol * 0.05, 0.25);
+        this.nextScaleNote = curTime + 0.6;
+        this.nextScaleIndex = (this.nextScaleIndex + 1) % 12;
+      }
+    }
+
   }
 
   draw() {
@@ -364,7 +382,7 @@ class App {
 
     this.UI.resetNo.onclick = () => this.UI.resetContainer.style.display = 'none';
     this.UI.resetYes.onclick = () => this.reset();
-    this.UI.endGameOk.onclick = () => this.UI.endGameContainer.style.display = 'none';
+    this.UI.endGameOk.onclick = () => {this.UI.endGameContainer.style.display = 'none'; this.playScale = false;};
   }
 
   getUnspentBoost() {
@@ -576,12 +594,12 @@ class Octave {
     const flagDiv = this.createElement('div', 'oFlagContainer', labelContainer, '', flagText);
 
     const statDiv = this.createElement('div', 'oStatDiv', topContainer, '', '');
-    const statCountDiv = this.createElement('div', 'oStatCountDiv', statDiv, '', `Total ${App.symbols.note}:`);
-    const statCountSpan = this.createElement('span', 'oStatCountSpan', statCountDiv, '', '');
     const statTempoDiv = this.createElement('div', 'oStatTempoDiv', statDiv, '', 'Tempo:');
     const statTempoSpan = this.createElement('span', 'oStatTempoSpan', statTempoDiv, '', '');
     const statVolumeDiv = this.createElement('div', 'oStatVolumeDiv', statDiv, '', 'Volume:');
     const statVolumeSpan = this.createElement('span', 'oStatVolumeSpan', statVolumeDiv, '', '');
+    const statCountDiv = this.createElement('div', 'oStatCountDiv', statDiv, '', `Total ${App.symbols.note}:`);
+    const statCountSpan = this.createElement('span', 'oStatCountSpan', statCountDiv, '', '');
 
     const progressContainer = this.createElement('div', 'oProgressContainer', topContainer,
       '', '');
@@ -690,7 +708,7 @@ class Octave {
 
       }
 
-      if (this.app.UI.audioEnableDiv.checked) {
+      if (this.app.UI.audioEnableDiv.checked && !this.app.playScale) {
         const baseVol = Math.pow(1 - (this.noteIndex / 12), 2);
         const highVol = Math.pow(this.noteIndex / 12, 2);
 
@@ -743,8 +761,10 @@ class Octave {
 
     //particle.style.background = 'red';
 
-    const dx = x + 10 * Math.sin(Math.random() * 2 * Math.PI);
-    const dy = y - 40 - 20 * Math.random();
+    //const dx = x + 10 * Math.sin(Math.random() * 2 * Math.PI);
+    //const dy = y - 40 - 20 * Math.random();
+    const dx = x - 110 + 10 * Math.sin(Math.random() * 2 * Math.PI);
+    const dy = y - 30 + 5 * Math.sin(Math.random() * 2 * Math.PI);
 
     const animation = particle.animate([
       {
