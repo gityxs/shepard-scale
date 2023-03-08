@@ -156,6 +156,8 @@ class App {
               const toElement = o.UI[`oButton${upgradeName[0].toUpperCase() + upgradeName.substring(1)}`];
               const toRect = toElement.getBoundingClientRect();
               this.createUpgradeParticle(fromRect.right, fromRect.top, toRect.right, toRect.top, () => o.buyUpgrade(upgradeName), toElement);
+            } else {
+              o.buyUpgrade(upgradeName);
             }
             return buyable;
           });
