@@ -2,7 +2,6 @@
 
 /*
 TODO:
-tune global upgrades
 */
 
 class App {
@@ -25,6 +24,7 @@ class App {
     this.nextScaleNote = 0;
     this.nextScaleIndex = 0;
     this.maxOctaveIndex = -1;
+    this.disableSaves = false;
 
     this.upgrades = {
       autoTempo: {baseCost: 2, costFactor: 1.3, basePower: 60, powerFactor: 0.8},
@@ -104,6 +104,7 @@ class App {
   }
 
   saveToStorage() {
+    if (this.disableSaves) {return;}
     this.state.octaves = [];
     this.octaves.forEach( o => {
       this.state.octaves.push(o.state);
@@ -125,6 +126,7 @@ class App {
   }
 
   reset() {
+    this.disableSaves = true;
     localStorage.removeItem('shepard_scale');
     window.location.reload();
   }
@@ -154,7 +156,7 @@ class App {
             //squares can't auto without upgrade
             if (o.types.square && this.state.upgradeLevels.breakSquares === 0) {return false;}
             const buyable = o.canBuyUpgrade(upgradeName);
-            if (buyable && document.body.animate && this.UI.particlesEnableDiv.checked) {
+            if (buyable && document.body.animate && this.UI.particlesEnableDiv.checked && this.state.upgradeLevels[u] < 20) {
               const fromRect = this.UI[`${u}ProgressContainer`].getBoundingClientRect();
               const toElement = o.UI[`oButton${upgradeName[0].toUpperCase() + upgradeName.substring(1)}`];
               const toRect = toElement.getBoundingClientRect();
@@ -229,7 +231,7 @@ class App {
     this.UI.playTimeSpan.innerText = gameTimeStr;
 
     this.UI.codaCountSpan.innerText = `${this.state.coda} (tempo x ${this.getUnspentBoost()})`;
-    this.UI.totalCodaSpan.innerText = `${this.state.totalCoda} / 10000 (tempo x ${this.getGlobalTempoScale()})`;
+    this.UI.totalCodaSpan.innerText = `${this.state.totalCoda} of 10000 (tempo x ${this.getGlobalTempoScale()})`;
 
     App.upgradeNames.forEach( u => {
       this.UI[`${u}CostDiv`].innerText = this.getUpgradeCost(u);
@@ -379,6 +381,8 @@ class App {
     resetButton.onclick = () => this.UI.resetContainer.style.display = 'block';
 
     const thanksDiv = this.createElement('div', 'thanksDiv', this.UI.staticWindow, '', 'Special thanks to Milk Rabbit for the inspiration!');
+    const linkDiv = this.createElement('div', 'linkDiv', this.UI.staticWindow, '', '');
+    linkDiv.innerHTML = "<a href='https://en.wikipedia.org/wiki/Shepard_tone'>Shepard Tone @ Wikipedia</a>"
 
     this.UI.resetNo.onclick = () => this.UI.resetContainer.style.display = 'none';
     this.UI.resetYes.onclick = () => this.reset();
@@ -390,7 +394,7 @@ class App {
     if (level === 0) {
       return 1;
     } else {
-      return Math.floor((this.state.coda / 10000) * Math.round(this.upgrades.unspentBoost.basePower * Math.pow(this.upgrades.unspentBoost.powerFactor, level - 1)));
+      return Math.max(1, Math.floor((this.state.coda / 10000) * Math.round(this.upgrades.unspentBoost.basePower * Math.pow(this.upgrades.unspentBoost.powerFactor, level - 1))));
     }
   }
 
@@ -701,7 +705,8 @@ class Octave {
       this.snapshot(curTime);
     }
 
-    if (deltaCount > 0 && this.getCurrentRate() < 1000) {
+    const effectiveRate = this.getCurrentRate() * this.getTimescale(this.curStackIndex);
+    if (deltaCount > 0 && effectiveRate < 1000) {
       if (document.body.animate && this.app.UI.particlesEnableDiv.checked) {
         const rect = this.UI.oProgressContainer.getBoundingClientRect();
         this.createParticle(rect.right, rect.top);
@@ -735,7 +740,8 @@ class Octave {
       this.UI.oStatTempoSpan.innerText = `${this.getCurrentRate()} ( ${App.symbols.division} ${(1/timescale).toFixed(0)})`;
     }
     this.UI.oStatVolumeSpan.innerText = this.getCurrentValue();
-    if (this.getCurrentRate() < 1000) {
+    const effectiveRate = this.getCurrentRate() * this.getTimescale(this.curStackIndex);
+    if (effectiveRate < 1000) {
       this.UI.oProgressBar.style.width = `${this.state.percent}%`;
       this.UI.oProgressContainer.style.filter = '';
     } else {
