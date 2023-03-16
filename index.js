@@ -383,6 +383,8 @@ class App {
     const thanksDiv = this.createElement('div', 'thanksDiv', this.UI.staticWindow, '', 'Special thanks to Milk Rabbit for the inspiration!');
     const linkDiv = this.createElement('div', 'linkDiv', this.UI.staticWindow, '', '');
     linkDiv.innerHTML = "<a href='https://en.wikipedia.org/wiki/Shepard_tone'>Shepard Tone @ Wikipedia</a>"
+    const discordDiv = this.createElement('div', 'discordDiv', this.UI.staticWindow, '', '');
+    discordDiv.innerHTML = "Discuss on <a href='https://discord.gg/pC9RY5B'>discord</a>";
 
     this.UI.resetNo.onclick = () => this.UI.resetContainer.style.display = 'none';
     this.UI.resetYes.onclick = () => this.reset();
