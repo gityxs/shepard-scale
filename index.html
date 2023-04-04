@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>shepard_scale</title>
+    <link rel="icon" href="favicon.png">
+    <!-- <meta name="viewport" content="width=device-width, initial-scale=1.0"> -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Varela+Round&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="index.css">
+  </head>
+  <body>
+    <div id='octaveColumn'><h1>Octaves</h1>
+      <div id='octaveList'>
+      </div>
+    </div>
+    <div id='staticWindowTOP'><h1>Global options</h1>
+      <div id='staticWindow'>
+      </div>
+    </div>
+    <div id='resetContainer'>
+      Are you sure you want to reset?
+      <div>
+        <button id='resetYes' class='buttonUtil'>Yes</button>
+        <button id='resetNo' class='buttonUtil'>No</button>
+      </div>
+    </div>
+    <div id='endGameContainer'>
+      Congrats! You've achieved coda 10,000 times in<br>
+      <span id='endGameTimeSpan'>5 days</span><br>
+      You can consider the game technically completed<br>
+      but you are free to continue playing for as long as you'd like.
+      <div>
+        <button id='endGameOk' class='buttonUtil'>OK</button>
+      </div>
+    </div>
+    <script src="index.js"></script>
+  </body>
+</html>
