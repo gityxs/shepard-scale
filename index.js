@@ -567,6 +567,10 @@ class Octave {
       };
     }
 
+    if (this.state.count === null || isNaN(this.state.count)) {
+      this.state.count = Infinity;
+    }
+
     this.UI = {};
 
     this.genHTML();
@@ -812,7 +816,9 @@ class Octave {
   buyUpgrade(type) {
     const cost = this.getUpgradeCost(type);
     if (this.state.count >= cost) {
-      this.state.count -= cost;
+      if (cost < Infinity) {
+        this.state.count -= cost;
+      }
       this.state.upgradeLevels[type]++;
       this.coda = this.coda || (type === 'coda');
       this.snapshot((new Date()).getTime() / 1000);
